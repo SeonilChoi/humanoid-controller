@@ -6,6 +6,17 @@ joy_handler_config_file: ../config/robot/ARTI-H1/joy.yaml
 urdf_file: ../config/robot/ARTI-H1/robot.urdf
 # Velocity-command policy (no gait clock, no AMP): run with
 #   ./ARTI-H1 ../config/robot/ARTI-H1/robot_velocity.yaml
+# agent_vel_kb08_240000.onnx (11-16, default) = knee-bent (KB) line round kb08, arti_h1_local
+# Template-Arti-H1-Velocity-KB-Direct-v0 (same patched USD, stance and -20/40/-20 zero as r21; run
+# logs/skrl/arti_h1_velocity/2026-11-15_08-59-54_ppo_torch agent_240000). kb05 recipe (real2sim delays 4/4/4/4/3/3 ms,
+# gyro +1 step, extra lag hip_roll 25 / ankle_pitch 12 ms, yaw torque bias, joint zero errors) fine-tuned with the joint
+# target low-pass 0.6 -> 0.35 (cut-off 8.7 -> 4.1 Hz) against the 3-10 Hz body shudder: REQUIRES
+# policy.target_lowpass_alpha 0.35 below (set back to 0.6 together with model_file when going back to r21).
+# Sim eval, same conditions for both (current real2sim delays + DR, per-policy low-pass):
+#            falls  push-falls  tilt rms  body rate xy  vx    vy    yaw s/l    straight |vy|/vx  heading err
+#   kb08     0      0.8 %       2.95 deg  0.353 rad/s   0.62  0.26  0.86/0.89  8.7 %             8.4 deg
+#   r21      0      3.1 %       3.41 deg  0.482 rad/s   0.75  0.33  0.95/0.98  13.2 %            10.6 deg
+#   -> steadier body, fewer push falls and straighter walking; ~17 % slower forward and ~10 % weaker turn tracking.
 # agent_vel_r21_240000.onnx = NEW PELVIS + NEW JOINT ZERO (branch arti-h1-new-pelvis, 11-12). arti_h1_local
 # Template-Arti-H1-Velocity-Direct-v0 (Isaac Lab 3.x / PhysX, skrl PPO), RSI round r21 (logs/rsi/r21; run
 # logs/skrl/arti_h1_velocity/2026-11-12_10-36-24_ppo_torch agent_240000), fine-tuned from r20 on the patched USD:
@@ -17,7 +28,8 @@ urdf_file: ../config/robot/ARTI-H1/robot.urdf
 # delays and target low-pass 0.6.
 # Sim eval with joint zero errors: vx 0.65 / vy 0.26 / yaw small 0.80 / large 0.82, 1 fall without pushes (arc),
 #   4.7 % kick falls (r16: 7.0 %), fwd-kick falls 9.4 % (r16-r20: ~14 %), tilt rms 3.7 deg.
-model_file: ../config/robot/ARTI-H1/agent_vel_r21_240000.onnx
+model_file: ../config/robot/ARTI-H1/agent_vel_kb08_240000.onnx
+# model_file: ../config/robot/ARTI-H1/agent_vel_r21_240000.onnx   # r21: also set target_lowpass_alpha 0.6
 # Per-control-step CSV (observation, ONNX q_des / actions, motor states, raw IMU) written to
 # <log_file>_YYYYmmdd_HHMMSS.csv; empty string disables it. Send this file when a real run misbehaves.
 log_file: ./arti_h1_vel_run
@@ -76,7 +88,8 @@ policy:
   target_rate_limit: 5.24
   # joint target low-pass, before the rate limit: target = previous + alpha * (q_des - previous); 1 = off.
   # 11-11 real run without it: 30 Hz joint chatter while standing. Sim r12 with 0.6: 0 falls, chatter 3-5x lower.
-  target_lowpass_alpha: 0.6
+  # MUST match the model's training value: kb08 0.35, r21 / r12-r16 0.6.
+  target_lowpass_alpha: 0.35
   control_dt: 0.0166666667
   # no gait clock in this policy (kept for the shared parser; the clock is logged but not observed)
   gait_phase_rate: 0.0
