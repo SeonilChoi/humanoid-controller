@@ -1,0 +1,86 @@
+# No-load BAM / system-identification recording for DAMIAO motors (examples/src/hardware/motor/example_damiao_bam.cpp).
+#
+#   cd build && ./examples/example_damiao_bam ../config/sysid/damiao_bam.yaml dm_j8006 [output_root] [--yes]
+#
+# Logs: <output_root>/<motor>/<YYYYmmdd_HHMMSS>/
+#   bam/<trajectory>_kp<kp>_<n>.json  BAM raw logs (position trajectories, MIT kp / kd, v_des = 0, tau_ff = 0)
+#                                     -> python -m bam.process / bam.fit (tools/damiao_sysid/README.md)
+#   sysid/<test>_<n>.json             extra no-load tests (chirp, velocity sweep, torque relay, breakaway)
+#                                     -> tools/damiao_sysid/fit_noload.py (uses the torque feed-forward too)
+#   session.yaml                      copy of the motor section used + motor config path
+# motor_config paths are relative to this file.
+# Every log: BAM raw format {"motor", "trajectory", "kp", "damping", "mass": 0, "arm_mass": 0, "length": 0, ...,
+# "entries": [{timestamp, position, speed, goal_position, goal_velocity, torque_ff, kp, kd, torque_enable,
+#              control (measured torque Nm), torque_demand (kp*e + kd*de + ff, Nm), temperature, error}]}.
+# position / goal_position are relative to the test center (rad, output shaft).
+#
+# NO LOAD: nothing attached to the output (or only a light, balanced disc). The output must be free to turn
+# +-(abort_window) rad around the center. Every test asks first: Enter = run, s + Enter = skip, q + Enter = quit
+# (--yes runs everything without asking). Ctrl+C = motor limp and stop.
+
+defaults:
+  loop_period_us: 2000        # control / log period of the recorder (motor bus runs at the motor config period)
+  center: current             # 'current' = position at start, or an absolute motor angle (rad)
+  move_speed: 1.0             # rad/s for moves back to the center between tests (not logged)
+  move_kp: 10.0
+  move_kd: 0.5
+  repeat: 1                   # times every BAM trajectory is recorded per kp
+  time_scale: 1.0             # BAM trajectories played at this speed (0.5 = half speed, twice as long)
+  amplitude: 1.0              # BAM trajectory angles multiplied by this
+  safety:
+    abort_window: 4.0         # |position - center| rad -> abort (motor limp)
+    velocity: 25.0            # |velocity| rad/s -> abort
+    temperature: 70.0         # deg C (max of MOS / coil) -> abort
+  bam_trajectories: [sin_time_square, sin_sin, up_and_down, half_sine]
+  # also available: steps (0.75 / 1.55 rad position steps: with no load and high kp the output hits peak torque and
+  # the no-load speed; use with a lower kp / velocity limit), lift_and_drop, nothing (torque off: only useful with a
+  # pendulum, the rotor just stops here)
+
+motors:
+  dm_j8006:                   # DM-J8006-2EC, 6:1, rated 8 Nm, peak 20 Nm
+    motor_config: ../hardware/motor/damiao_j8006.yaml
+    bam:
+      kp: [5.0, 10.0, 20.0, 40.0]   # one log set per kp (BAM fit --validation_kp holds one out)
+      kd: 0.3                       # MIT kd for every BAM log (= log "damping")
+    sysid:
+      - {type: chirp, kp: 20.0, kd: 0.3, amplitude: 0.3, f0: 0.2, f1: 15.0, duration: 20.0}
+      - {type: velocity_sweep, kp: 20.0, kd: 0.3, window: 1.5, speeds: [0.2, 0.5, 1.0, 2.0, 4.0, 8.0, 12.0], cycles: 2}
+      - {type: torque_relay, kd: 0.0, window: 1.0, torques: [0.3, 0.6, 1.0], duration: 4.0, velocity_cap: 15.0}
+      - {type: breakaway, rate: 0.2, max_torque: 1.5, move: 0.02, velocity: 0.15, cycles: 4}
+
+  dm_j6006:                   # DM-J6006-2EC, 6:1
+    motor_config: ../hardware/motor/damiao_j6006.yaml
+    bam:
+      kp: [3.0, 6.0, 12.0, 25.0]
+      kd: 0.2
+    sysid:
+      - {type: chirp, kp: 12.0, kd: 0.2, amplitude: 0.3, f0: 0.2, f1: 15.0, duration: 20.0}
+      - {type: velocity_sweep, kp: 12.0, kd: 0.2, window: 1.5, speeds: [0.2, 0.5, 1.0, 2.0, 4.0, 8.0, 12.0], cycles: 2}
+      - {type: torque_relay, kd: 0.0, window: 1.0, torques: [0.2, 0.4, 0.7], duration: 4.0, velocity_cap: 15.0}
+      - {type: breakaway, rate: 0.1, max_torque: 1.0, move: 0.02, velocity: 0.15, cycles: 4}
+
+  dm_j4340:                   # DM-J4340-2EC, 40:1 (slow: ~5 rad/s at 24 V, high friction / reflected inertia)
+    motor_config: ../hardware/motor/damiao_j4340.yaml
+    time_scale: 0.5           # sin_time_square reaches 12 rad/s at full speed
+    safety:
+      velocity: 10.0
+    bam:
+      kp: [10.0, 20.0, 40.0, 80.0]
+      kd: 1.0
+    sysid:
+      - {type: chirp, kp: 40.0, kd: 1.0, amplitude: 0.2, f0: 0.2, f1: 8.0, duration: 20.0}
+      - {type: velocity_sweep, kp: 40.0, kd: 1.0, window: 1.5, speeds: [0.1, 0.2, 0.5, 1.0, 2.0, 3.0, 4.0], cycles: 2}
+      - {type: torque_relay, kd: 0.0, window: 1.0, torques: [1.0, 2.0, 3.0], duration: 4.0, velocity_cap: 6.0}
+      - {type: breakaway, rate: 0.5, max_torque: 5.0, move: 0.02, velocity: 0.15, cycles: 4}
+
+# Test types (sysid):
+#   chirp:          goal = amplitude * sin(log sweep f0 -> f1 Hz) over duration s, 1 s fade in / out (kp, kd, v_des = 0).
+#   velocity_sweep: triangle wave +-window at each speed (goal_velocity = +-speed fed forward), 'cycles' round trips
+#                   per speed. Steady-state measured torque vs velocity = friction curve.
+#   torque_relay:   kp = 0, tau_ff = +torque until position > +window, then -torque until < -window (bang-bang
+#                   oscillation), 'duration' s per torque. tau_ff = 0 while |velocity| > velocity_cap.
+#                   Acceleration / deceleration phases separate inertia (armature) from friction.
+#   breakaway:      kp = kd = 0, tau_ff ramps up at 'rate' Nm/s until the output moves 'move' rad or turns faster
+#                   than 'velocity' rad/s (or max_torque); a slower rate gives a less biased (lower) value,
+#                   then 0 for 0.5 s; alternating direction, 'cycles' times per direction. Prints the breakaway
+#                   (static friction) torque.

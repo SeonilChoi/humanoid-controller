@@ -1,0 +1,18 @@
+# DM-J8006-2EC alone on the bus for the no-load BAM / sysid recording (examples/src/hardware/motor/example_damiao_bam.cpp).
+# Device / ID notes: see damiao.yaml. Set the motor's CAN ID to 1 with the DAMIAO tool (or edit 'id').
+# kp / kd here are only the gains of example_damiao; the recorder uses config/sysid/damiao_bam.yaml.
+masters:
+  - id: 0
+    period: 1000 # microseconds
+    type: damiao
+    device: /dev/Damiao
+
+    motors:
+      - id: 1
+        gear_ratio: 6.0
+        axis: 1
+        pulse_per_revolution: 16384
+        kp: 10.0
+        kd: 0.5
+        min: -12.5
+        max:  12.5
