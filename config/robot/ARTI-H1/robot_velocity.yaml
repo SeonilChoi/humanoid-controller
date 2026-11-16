@@ -6,7 +6,11 @@ joy_handler_config_file: ../config/robot/ARTI-H1/joy.yaml
 urdf_file: ../config/robot/ARTI-H1/robot.urdf
 # Velocity-command policy (no gait clock, no AMP): run with
 #   ./ARTI-H1 ../config/robot/ARTI-H1/robot_velocity.yaml
-# agent_vel_kb08_240000.onnx (11-16, default) = knee-bent (KB) line round kb08, arti_h1_local
+# 11-16 REVERTED TO r21: on the robot kb08 stood in a self-sustained 8 Hz ankle-pitch oscillation after walking
+# (gyro_y rms 0.8-0.95 rad/s, action step change 36x r21; quiet only right after start), then a motor-link fault.
+# Not reproduced in sim (also with +36 ms delay); its gyro -> joint target gain is ~2x r21 (ankle) / 3-7x (hip, knee).
+# Do not use kb08 / target_lowpass_alpha 0.35 on the robot.
+# agent_vel_kb08_240000.onnx (11-16, withdrawn) = knee-bent (KB) line round kb08, arti_h1_local
 # Template-Arti-H1-Velocity-KB-Direct-v0 (same patched USD, stance and -20/40/-20 zero as r21; run
 # logs/skrl/arti_h1_velocity/2026-11-15_08-59-54_ppo_torch agent_240000). kb05 recipe (real2sim delays 4/4/4/4/3/3 ms,
 # gyro +1 step, extra lag hip_roll 25 / ankle_pitch 12 ms, yaw torque bias, joint zero errors) fine-tuned with the joint
@@ -28,8 +32,8 @@ urdf_file: ../config/robot/ARTI-H1/robot.urdf
 # delays and target low-pass 0.6.
 # Sim eval with joint zero errors: vx 0.65 / vy 0.26 / yaw small 0.80 / large 0.82, 1 fall without pushes (arc),
 #   4.7 % kick falls (r16: 7.0 %), fwd-kick falls 9.4 % (r16-r20: ~14 %), tilt rms 3.7 deg.
-model_file: ../config/robot/ARTI-H1/agent_vel_kb08_240000.onnx
-# model_file: ../config/robot/ARTI-H1/agent_vel_r21_240000.onnx   # r21: also set target_lowpass_alpha 0.6
+model_file: ../config/robot/ARTI-H1/agent_vel_r21_240000.onnx
+# model_file: ../config/robot/ARTI-H1/agent_vel_kb08_240000.onnx   # kb08 (withdrawn): needs target_lowpass_alpha 0.35
 # Per-control-step CSV (observation, ONNX q_des / actions, motor states, raw IMU) written to
 # <log_file>_YYYYmmdd_HHMMSS.csv; empty string disables it. Send this file when a real run misbehaves.
 log_file: ./arti_h1_vel_run
@@ -88,8 +92,8 @@ policy:
   target_rate_limit: 5.24
   # joint target low-pass, before the rate limit: target = previous + alpha * (q_des - previous); 1 = off.
   # 11-11 real run without it: 30 Hz joint chatter while standing. Sim r12 with 0.6: 0 falls, chatter 3-5x lower.
-  # MUST match the model's training value: kb08 0.35, r21 / r12-r16 0.6.
-  target_lowpass_alpha: 0.35
+  # MUST match the model's training value: r21 / r12-r16 0.6 (kb08 0.35, withdrawn).
+  target_lowpass_alpha: 0.6
   control_dt: 0.0166666667
   # no gait clock in this policy (kept for the shared parser; the clock is logged but not observed)
   gait_phase_rate: 0.0
