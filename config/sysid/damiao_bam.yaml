@@ -69,7 +69,7 @@ motors:
       - {type: torque_relay, kd: 0.0, window: 1.0, torques: [0.4, 0.7, 1.0], duration: 4.0, velocity_cap: 18.0}
       - {type: breakaway, rate: 0.15, max_torque: 1.5, move: 0.02, velocity: 0.15, cycles: 4}
 
-  dm_j4340:                   # DM-J4340-2EC: 40:1, rated 14 Nm / peak 40 Nm, rated 36 rpm (3.8 rad/s),
+  dm_j4340:                   # DM-J4340-2EC: 40:1, rated 14 Nm / peak 40 Nm (MIT range TMAX 28 on ours), rated 36 rpm (3.8 rad/s),
                               # no-load 56 rpm @24 V (5.9 rad/s) / 112 rpm @48 V (11.7 rad/s)
     motor_config: ../hardware/motor/damiao_j4340.yaml
     time_scale: 0.5           # sin_time_square peaks at 6 rad/s at half speed (12 at full): just over no-load

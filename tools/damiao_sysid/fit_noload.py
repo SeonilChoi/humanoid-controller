@@ -33,7 +33,8 @@ from scipy.signal import savgol_filter
 LIMITS = {  # peak torque [Nm], no-load speed [rad/s] at 24 V (aifitlab DAMIAO wiki manuals): only the model clip
     "dm_j8006": (20.0, 19.9),   # 6:1, 190 rpm
     "dm_j6006": (12.0, 25.1),   # 6:1, 240 rpm
-    "dm_j4340": (40.0, 5.9),    # 40:1, 56 rpm (48 V: 112 rpm = 11.7 rad/s)
+    "dm_j4340": (28.0, 5.9),    # 40:1, 56 rpm (48 V: 112 rpm = 11.7 rad/s); peak 40 Nm but the MIT range
+                                # (TMAX register) is 28 Nm on this motor
 }
 
 PARAMS = ["armature", "frictionloss", "stribeck", "stribeck_velocity", "damping", "delay", "ratio"]

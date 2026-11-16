@@ -1,5 +1,6 @@
 # DM-J4340-2EC alone on the bus for the no-load BAM / sysid recording (examples/src/hardware/motor/example_damiao_bam.cpp).
-# Device / ID notes: see damiao.yaml. Set the motor's CAN ID to 3 with the DAMIAO tool (or edit 'id').
+# Device / ID notes: see damiao.yaml. CAN ID 1 = factory default of the J4340 here (register read 2026-11-16:
+# MST_ID 0, PMAX 12.5, VMAX 10, TMAX 28, 1 Mbps).
 # kp / kd here are only the gains of example_damiao; the recorder uses config/sysid/damiao_bam.yaml.
 masters:
   - id: 0
@@ -8,7 +9,7 @@ masters:
     device: /dev/Damiao
 
     motors:
-      - id: 3
+      - id: 1
         gear_ratio: 40.0
         axis: 1
         pulse_per_revolution: 16384

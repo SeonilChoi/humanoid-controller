@@ -87,11 +87,12 @@ class DamiaoActuator(Actuator):
 
 # Initial guesses only (the fit moves them). Peak torque / no-load speed from the aifitlab DAMIAO wiki manuals at
 # 24 V: J8006 6:1 20 Nm 190 rpm, J6006 6:1 12 Nm 240 rpm, J4340 40:1 40 Nm 56 rpm (112 rpm @48 V).
-# armature: J8006 from the 2026-11-16 no-load run, the others are guesses.
+# J4340: max_torque = TMAX register (28 Nm), the MIT range, below the 40 Nm peak.
+# armature: J8006 / J6006 from the 2026-11-16 no-load runs, J4340 a guess.
 MOTORS = {
     "dm_j8006": dict(max_torque=20.0, max_velocity=19.9, armature=0.005, max_friction=2.0, max_viscous=1.0),
     "dm_j6006": dict(max_torque=12.0, max_velocity=25.1, armature=0.003, max_friction=1.5, max_viscous=1.0),
-    "dm_j4340": dict(max_torque=40.0, max_velocity=5.9, armature=0.05, max_friction=8.0, max_viscous=10.0),
+    "dm_j4340": dict(max_torque=28.0, max_velocity=5.9, armature=0.05, max_friction=8.0, max_viscous=10.0),
 }
 
 for _name, _kw in MOTORS.items():

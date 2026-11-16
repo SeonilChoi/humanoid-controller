@@ -20,6 +20,7 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <memory>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -488,7 +489,14 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    motor_manager::MotorManager manager(settings.motor_config.string());
+    std::unique_ptr<motor_manager::MotorManager> manager_ptr;
+    try {
+        manager_ptr = std::make_unique<motor_manager::MotorManager>(settings.motor_config.string());
+    } catch (const std::exception& e) {
+        std::cerr << "[bam] " << e.what() << std::endl;
+        return 1;
+    }
+    motor_manager::MotorManager& manager = *manager_ptr;
     if (manager.number_of_motors() != 1) {
         std::cerr << "[bam] " << settings.motor_config << " must hold exactly one motor (has "
                   << manager.number_of_motors() << ")." << std::endl;
