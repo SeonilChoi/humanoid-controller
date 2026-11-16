@@ -85,12 +85,13 @@ class DamiaoActuator(Actuator):
         return self.model.armature.value
 
 
-# Initial guesses only (the fit moves them). Peak torque / no-load speed from the DAMIAO datasheets at 24 V
-# (J8006 / J6006 6:1, J4340 40:1); armature = output-side inertia guess.
+# Initial guesses only (the fit moves them). Peak torque / no-load speed from the aifitlab DAMIAO wiki manuals at
+# 24 V: J8006 6:1 20 Nm 190 rpm, J6006 6:1 12 Nm 240 rpm, J4340 40:1 40 Nm 56 rpm (112 rpm @48 V).
+# armature: J8006 from the 2026-11-16 no-load run, the others are guesses.
 MOTORS = {
-    "dm_j8006": dict(max_torque=20.0, max_velocity=20.0, armature=0.004, max_friction=2.0, max_viscous=1.0),
-    "dm_j6006": dict(max_torque=12.0, max_velocity=30.0, armature=0.002, max_friction=1.5, max_viscous=1.0),
-    "dm_j4340": dict(max_torque=27.0, max_velocity=5.5, armature=0.05, max_friction=5.0, max_viscous=5.0),
+    "dm_j8006": dict(max_torque=20.0, max_velocity=19.9, armature=0.005, max_friction=2.0, max_viscous=1.0),
+    "dm_j6006": dict(max_torque=12.0, max_velocity=25.1, armature=0.003, max_friction=1.5, max_viscous=1.0),
+    "dm_j4340": dict(max_torque=40.0, max_velocity=5.9, armature=0.05, max_friction=8.0, max_viscous=10.0),
 }
 
 for _name, _kw in MOTORS.items():

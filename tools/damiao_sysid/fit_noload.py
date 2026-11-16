@@ -30,10 +30,10 @@ import numpy as np
 from scipy.optimize import least_squares
 from scipy.signal import savgol_filter
 
-LIMITS = {  # peak torque [Nm], no-load speed [rad/s] (datasheet, 24 V): only the clip of the model
-    "dm_j8006": (20.0, 20.0),
-    "dm_j6006": (12.0, 30.0),
-    "dm_j4340": (27.0, 5.5),
+LIMITS = {  # peak torque [Nm], no-load speed [rad/s] at 24 V (aifitlab DAMIAO wiki manuals): only the model clip
+    "dm_j8006": (20.0, 19.9),   # 6:1, 190 rpm
+    "dm_j6006": (12.0, 25.1),   # 6:1, 240 rpm
+    "dm_j4340": (40.0, 5.9),    # 40:1, 56 rpm (48 V: 112 rpm = 11.7 rad/s)
 }
 
 PARAMS = ["armature", "frictionloss", "stribeck", "stribeck_velocity", "damping", "delay", "ratio"]
@@ -263,6 +263,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("sessions", nargs="+", help="example_damiao_bam session dirs (or single .json logs)")
     ap.add_argument("--motor", required=True, choices=sorted(LIMITS))
+    ap.add_argument("--velocity_limit", type=float, default=None,
+                    help="override the no-load speed of the model clip [rad/s] (e.g. 11.7 for a J4340 on 48 V)")
     ap.add_argument("--dt", type=float, default=0.002)
     ap.add_argument("--segment", type=float, default=0.5, help="rollout length before re-sync to the measured state [s]")
     ap.add_argument("--segment_open_loop", type=float, default=0.1,
@@ -287,6 +289,8 @@ def main():
     print("direct estimates:", json.dumps({k: v for k, v in direct.items() if k != "friction_curve"}, indent=2))
 
     limits = LIMITS[args.motor]
+    if args.velocity_limit:
+        limits = (limits[0], args.velocity_limit)
     rng = np.random.default_rng(0)
     groups = []  # (segments, fit subset)
     for which, length, label in ((lambda l: not is_open_loop(l), args.segment, "closed-loop"),

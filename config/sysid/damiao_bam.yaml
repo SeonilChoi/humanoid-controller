@@ -37,7 +37,12 @@ defaults:
   # pendulum, the rotor just stops here)
 
 motors:
-  dm_j8006:                   # DM-J8006-2EC, 6:1, rated 8 Nm, peak 20 Nm
+  # Specs: aifitlab DAMIAO wiki manuals (wiki.aifitlab.com/damiao-docs/...), assuming a 24 V supply.
+  # The test settings (kp / kd, torques, speeds, limits) are choices for a no-load run, not datasheet values.
+
+  dm_j8006:                   # DM-J8006-2EC: 6:1, rated 8 Nm / peak 20 Nm, rated 120 rpm, no-load 190 rpm @24 V
+                              # (19.9 rad/s; 390 rpm listed too, presumably @48 V). Measured 2026-11-16 (no load):
+                              # breakaway 0.30-0.42 Nm, armature ~0.004-0.007 kg m^2, top speed ~21 rad/s
     motor_config: ../hardware/motor/damiao_j8006.yaml
     bam:
       kp: [5.0, 10.0, 20.0, 40.0]   # one log set per kp (BAM fit --validation_kp holds one out)
@@ -45,33 +50,39 @@ motors:
     sysid:
       - {type: chirp, kp: 20.0, kd: 0.3, amplitude: 0.3, f0: 0.2, f1: 15.0, duration: 20.0}
       - {type: velocity_sweep, kp: 20.0, kd: 0.3, window: 1.5, speeds: [0.2, 0.5, 1.0, 2.0, 4.0, 8.0, 12.0], cycles: 2}
-      - {type: torque_relay, kd: 0.0, window: 1.0, torques: [0.3, 0.6, 1.0], duration: 4.0, velocity_cap: 15.0}
+      # 0.3 Nm (first run) is below the breakaway torque: the output did not move
+      - {type: torque_relay, kd: 0.0, window: 1.0, torques: [0.6, 0.9, 1.2], duration: 4.0, velocity_cap: 15.0}
       - {type: breakaway, rate: 0.2, max_torque: 1.5, move: 0.02, velocity: 0.15, cycles: 4}
 
-  dm_j6006:                   # DM-J6006-2EC, 6:1
+  dm_j6006:                   # DM-J6006-2EC: 6:1, rated 4 Nm / peak 12 Nm, rated 150 rpm, no-load 240 rpm (25.1 rad/s,
+                              # voltage not stated), 4 A rated / 13 A peak. (Wiki table is headed "DM-J4310-2EC";
+                              # the 6:1 column is the J6006.)
     motor_config: ../hardware/motor/damiao_j6006.yaml
+    safety:
+      velocity: 30.0          # above the 25 rad/s no-load speed: the chirp / sweep may reach it
     bam:
       kp: [3.0, 6.0, 12.0, 25.0]
       kd: 0.2
     sysid:
       - {type: chirp, kp: 12.0, kd: 0.2, amplitude: 0.3, f0: 0.2, f1: 15.0, duration: 20.0}
       - {type: velocity_sweep, kp: 12.0, kd: 0.2, window: 1.5, speeds: [0.2, 0.5, 1.0, 2.0, 4.0, 8.0, 12.0], cycles: 2}
-      - {type: torque_relay, kd: 0.0, window: 1.0, torques: [0.2, 0.4, 0.7], duration: 4.0, velocity_cap: 15.0}
-      - {type: breakaway, rate: 0.1, max_torque: 1.0, move: 0.02, velocity: 0.15, cycles: 4}
+      - {type: torque_relay, kd: 0.0, window: 1.0, torques: [0.4, 0.7, 1.0], duration: 4.0, velocity_cap: 18.0}
+      - {type: breakaway, rate: 0.15, max_torque: 1.5, move: 0.02, velocity: 0.15, cycles: 4}
 
-  dm_j4340:                   # DM-J4340-2EC, 40:1 (slow: ~5 rad/s at 24 V, high friction / reflected inertia)
+  dm_j4340:                   # DM-J4340-2EC: 40:1, rated 14 Nm / peak 40 Nm, rated 36 rpm (3.8 rad/s),
+                              # no-load 56 rpm @24 V (5.9 rad/s) / 112 rpm @48 V (11.7 rad/s)
     motor_config: ../hardware/motor/damiao_j4340.yaml
-    time_scale: 0.5           # sin_time_square reaches 12 rad/s at full speed
+    time_scale: 0.5           # sin_time_square peaks at 6 rad/s at half speed (12 at full): just over no-load
     safety:
-      velocity: 10.0
+      velocity: 10.0          # 24 V; raise to ~14 on 48 V
     bam:
       kp: [10.0, 20.0, 40.0, 80.0]
       kd: 1.0
     sysid:
       - {type: chirp, kp: 40.0, kd: 1.0, amplitude: 0.2, f0: 0.2, f1: 8.0, duration: 20.0}
-      - {type: velocity_sweep, kp: 40.0, kd: 1.0, window: 1.5, speeds: [0.1, 0.2, 0.5, 1.0, 2.0, 3.0, 4.0], cycles: 2}
-      - {type: torque_relay, kd: 0.0, window: 1.0, torques: [1.0, 2.0, 3.0], duration: 4.0, velocity_cap: 6.0}
-      - {type: breakaway, rate: 0.5, max_torque: 5.0, move: 0.02, velocity: 0.15, cycles: 4}
+      - {type: velocity_sweep, kp: 40.0, kd: 1.0, window: 1.5, speeds: [0.1, 0.2, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0], cycles: 2}
+      - {type: torque_relay, kd: 0.0, window: 1.0, torques: [2.0, 4.0, 6.0], duration: 4.0, velocity_cap: 6.5}
+      - {type: breakaway, rate: 0.5, max_torque: 8.0, move: 0.02, velocity: 0.15, cycles: 4}
 
 # Test types (sysid):
 #   chirp:          goal = amplitude * sin(log sweep f0 -> f1 Hz) over duration s, 1 s fade in / out (kp, kd, v_des = 0).
