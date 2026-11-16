@@ -6,6 +6,7 @@ ACTION=="add", KERNEL=="ttyACM*", SUBSYSTEM=="tty", ATTRS{idVendor}=="16d0", ATT
 KERNEL=="ttyUSB*", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6014", ATTRS{serial}=="FTBW2W11", MODE="0666", SYMLINK+="Unitree"
 KERNEL=="ttyUSB*", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6014", ATTRS{serial}=="FTBENY4L", MODE="0666", SYMLINK+="Dynamixel"
 KERNEL=="ttyUSB*", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6014", ATTRS{serial}=="FTBP1SO2", MODE="0666", SYMLINK+="Dynamixel"
+ACTION=="add", KERNEL=="ttyACM*", SUBSYSTEM=="tty", ATTRS{idVendor}=="2e88", ATTRS{idProduct}=="4603", MODE="0666", SYMLINK+="Damiao"
 KERNEL=="ttyUSB*", ATTRS{idVendor}=="2639", MODE="0666", SYMLINK+="Xsens"
 ACTION=="add", SUBSYSTEM=="usb-serial", ATTR{latency_timer}="1"
 EOF
@@ -14,7 +15,7 @@ sudo udevadm control --reload-rules
 sudo udevadm trigger
 sleep 1
 
-for dev in /dev/Unitree /dev/Dynamixel /dev/CANable /dev/Xsens; do
+for dev in /dev/Unitree /dev/Dynamixel /dev/CANable /dev/Damiao /dev/Xsens; do
     if [[ -e "$dev" ]]; then
         sudo chmod 777 "$dev"
     fi

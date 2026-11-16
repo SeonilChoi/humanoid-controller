@@ -11,6 +11,7 @@
 #include "motor/master/unitree_master.hpp"
 #include "motor/master/cubemars_master.hpp"
 #include "motor/master/dynamixel_master.hpp"
+#include "motor/master/damiao_master.hpp"
 
 motor_manager::MotorManager::MotorManager(const std::string& config_file) {
     load(config_file);
@@ -107,6 +108,10 @@ void motor_manager::MotorManager::load(const std::string& config_file) {
             masters_[master_id] = std::make_unique<cubemars::CubemarsMaster>(period, device);
         } else if (type == "dynamixel") {
             masters_[master_id] = std::make_unique<dynamixel::DynamixelMaster>(period, device);
+        } else if (type == "damiao") {
+            masters_[master_id] = std::make_unique<damiao::DamiaoMaster>(period, device);
+        } else {
+            throw std::runtime_error("[MotorManager::load] Unknown master type: " + type);
         }
 
         YAML::Node motors = m["motors"];

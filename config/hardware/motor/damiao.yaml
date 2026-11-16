@@ -1,0 +1,26 @@
+# DAMIAO DM-J8006-2EC, MIT mode (6:1 gearbox inside the motor: every value is OUTPUT-shaft side).
+#   CAN bus: 1 Mbps standard frames (motor default). device:
+#     can1          SocketCAN, e.g. the CANable brought up by requirements/udev-rules.sh (slcand -s8 = 1 Mbps)
+#     /dev/Damiao   DAMIAO USB2CAN adapter (serial 921600, symlink from requirements/udev-rules.sh; or /dev/ttyACM0)
+#   id: motor CAN ID (DAMIAO tool "CAN ID"); IDs on one master must differ in their low 4 bits.
+#       Feedback comes from the motor's Master ID (default 0x00), detected automatically at start-up.
+#   gear_ratio / pulse_per_revolution: informational only (not used by the driver).
+#   zero_offset (optional, rad): motor_position * axis = joint_position + zero_offset.
+#       Leave it out to command / read the raw motor position (motor zero set with the DAMIAO tool or 0xFE).
+#   kp / kd: MIT gains, output side (kp 0..500 Nm/rad, kd 0..5 Nm*s/rad). Keep kd > 0 for position control.
+#   PMAX / VMAX / TMAX are read from the motor registers at start-up (fallback 12.5 / 45 / 20).
+masters:
+  - id: 0
+    period: 1000 # microseconds
+    type: damiao
+    device: /dev/Damiao
+
+    motors:
+      - id: 1
+        gear_ratio: 6.0
+        axis: 1
+        pulse_per_revolution: 16384
+        kp: 5.0
+        kd: 0.25
+        min: -1.57
+        max:  1.57

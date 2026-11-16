@@ -4,6 +4,9 @@ target_link_libraries(example_unitree PRIVATE motor)
 add_executable(example_cubemars src/hardware/motor/example_cubemars.cpp)
 target_link_libraries(example_cubemars PRIVATE motor)
 
+add_executable(example_damiao src/hardware/motor/example_damiao.cpp)
+target_link_libraries(example_damiao PRIVATE motor)
+
 add_executable(example_dynamixel src/hardware/motor/example_dynamixel.cpp)
 target_link_libraries(example_dynamixel PRIVATE motor)
 
