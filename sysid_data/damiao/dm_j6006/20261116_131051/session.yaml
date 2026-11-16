@@ -1,0 +1,16 @@
+# example_damiao_bam session
+motor: dm_j6006
+bam_config: /home/jetson/humanoid_controller/build/../config/sysid/damiao_bam.yaml
+motor_config: /home/jetson/humanoid_controller/build/../config/sysid/../hardware/motor/damiao_j6006.yaml
+section:
+  motor_config: ../hardware/motor/damiao_j6006.yaml
+  safety:
+    velocity: 30.0
+  bam:
+    kp: [3.0, 6.0, 12.0, 25.0]
+    kd: 0.2
+  sysid:
+    - {type: chirp, kp: 12.0, kd: 0.2, amplitude: 0.3, f0: 0.2, f1: 15.0, duration: 20.0}
+    - {type: velocity_sweep, kp: 12.0, kd: 0.2, window: 1.5, speeds: [0.2, 0.5, 1.0, 2.0, 4.0, 8.0, 12.0], cycles: 2}
+    - {type: torque_relay, kd: 0.0, window: 1.0, torques: [0.4, 0.7, 1.0], duration: 4.0, velocity_cap: 18.0}
+    - {type: breakaway, rate: 0.15, max_torque: 1.5, move: 0.02, velocity: 0.15, cycles: 4}
