@@ -1,0 +1,251 @@
+{
+  "motor": "dm_j8006",
+  "sessions": [
+    "/home/jetson/humanoid_controller/build/damiao_logs/dm_j8006/20261116_124808"
+  ],
+  "model": "tau = clip(ratio * MIT(t - delay)); armature ddq = tau - friction(frictionloss + stribeck, damping)",
+  "params": {
+    "ratio": 1.0,
+    "armature": 0.006675902549752623,
+    "frictionloss": 0.2293629720340407,
+    "stribeck": 0.2091819866675736,
+    "stribeck_velocity": 0.35524131853818003,
+    "damping": 0.005874710318885841,
+    "delay": 0.0044775674515633536
+  },
+  "sim": {
+    "armature": 0.006675902549752623,
+    "frictionloss": 0.2293629720340407,
+    "damping": 0.005874710318885841,
+    "effort_limit": 20.0,
+    "velocity_limit": 20.0,
+    "delay_s": 0.0044775674515633536,
+    "torque_scale": 1.0
+  },
+  "segment_s": 0.5,
+  "segment_open_loop_s": 0.1,
+  "dt": 0.002,
+  "substeps": 8,
+  "fixed": {
+    "ratio": 1.0
+  },
+  "cost": 0.002134352131507795,
+  "per_log": {
+    "bam/half_sine_kp10_1.json": {
+      "position_rmse": 0.009949909094448359,
+      "velocity_rmse": 0.17721707091070973,
+      "segment_s": 0.5
+    },
+    "bam/half_sine_kp20_1.json": {
+      "position_rmse": 0.006234425590089163,
+      "velocity_rmse": 0.1820894944383098,
+      "segment_s": 0.5
+    },
+    "bam/half_sine_kp40_1.json": {
+      "position_rmse": 0.005105960814981448,
+      "velocity_rmse": 0.24663234472476073,
+      "segment_s": 0.5
+    },
+    "bam/half_sine_kp5_1.json": {
+      "position_rmse": 0.019232455032352228,
+      "velocity_rmse": 0.21902071682562177,
+      "segment_s": 0.5
+    },
+    "bam/sin_sin_kp10_1.json": {
+      "position_rmse": 0.010444621747699676,
+      "velocity_rmse": 0.15713936879928145,
+      "segment_s": 0.5
+    },
+    "bam/sin_sin_kp20_1.json": {
+      "position_rmse": 0.007318283487816817,
+      "velocity_rmse": 0.13726218335437612,
+      "segment_s": 0.5
+    },
+    "bam/sin_sin_kp40_1.json": {
+      "position_rmse": 0.006377775821286333,
+      "velocity_rmse": 0.15574121698208948,
+      "segment_s": 0.5
+    },
+    "bam/sin_sin_kp5_1.json": {
+      "position_rmse": 0.015213490803922182,
+      "velocity_rmse": 0.19316889745327073,
+      "segment_s": 0.5
+    },
+    "bam/sin_time_square_kp10_1.json": {
+      "position_rmse": 0.014542242943151497,
+      "velocity_rmse": 0.169643655729987,
+      "segment_s": 0.5
+    },
+    "bam/sin_time_square_kp20_1.json": {
+      "position_rmse": 0.011569070027553698,
+      "velocity_rmse": 0.18136232748245174,
+      "segment_s": 0.5
+    },
+    "bam/sin_time_square_kp40_1.json": {
+      "position_rmse": 0.01077302518213992,
+      "velocity_rmse": 0.22041109064915781,
+      "segment_s": 0.5
+    },
+    "bam/sin_time_square_kp5_1.json": {
+      "position_rmse": 0.016774511040889374,
+      "velocity_rmse": 0.1498093303056189,
+      "segment_s": 0.5
+    },
+    "bam/up_and_down_kp10_1.json": {
+      "position_rmse": 0.011601343335845317,
+      "velocity_rmse": 0.18202167845750888,
+      "segment_s": 0.5
+    },
+    "bam/up_and_down_kp20_1.json": {
+      "position_rmse": 0.007105252830785132,
+      "velocity_rmse": 0.18470810510967592,
+      "segment_s": 0.5
+    },
+    "bam/up_and_down_kp40_1.json": {
+      "position_rmse": 0.0045341327134131,
+      "velocity_rmse": 0.19969493060929155,
+      "segment_s": 0.5
+    },
+    "bam/up_and_down_kp5_1.json#1": {
+      "position_rmse": 0.0172769634958354,
+      "velocity_rmse": 0.179599971637352,
+      "segment_s": 0.5
+    },
+    "bam/up_and_down_kp5_1.json#2": {
+      "position_rmse": 0.014400318781258196,
+      "velocity_rmse": 0.14587278860040398,
+      "segment_s": 0.5
+    },
+    "sysid/01_chirp.json": {
+      "position_rmse": 0.03021777840359525,
+      "velocity_rmse": 1.0270192590360743,
+      "segment_s": 0.5
+    },
+    "sysid/02_velocity_sweep.json": {
+      "position_rmse": 0.00826308633741779,
+      "velocity_rmse": 0.26472922655605213,
+      "segment_s": 0.5
+    },
+    "sysid/03_torque_relay.json#1": {
+      "position_rmse": 6.593190998683368e-05,
+      "velocity_rmse": 0.01843303667466116,
+      "segment_s": 0.1
+    },
+    "sysid/03_torque_relay.json#2": {
+      "position_rmse": 0.015251082594036793,
+      "velocity_rmse": 0.5066600315636193,
+      "segment_s": 0.1
+    },
+    "sysid/03_torque_relay.json#3": {
+      "position_rmse": 0.01792527600673173,
+      "velocity_rmse": 0.6699151192448293,
+      "segment_s": 0.1
+    },
+    "sysid/04_breakaway.json#1": {
+      "position_rmse": 0.012731050185009377,
+      "velocity_rmse": 0.3865002195937864,
+      "segment_s": 0.1
+    },
+    "sysid/04_breakaway.json#2": {
+      "position_rmse": 0.00044455907730158795,
+      "velocity_rmse": 0.028563359099359805,
+      "segment_s": 0.1
+    },
+    "sysid/04_breakaway.json#3": {
+      "position_rmse": 0.0003311264353720323,
+      "velocity_rmse": 0.02954347468940027,
+      "segment_s": 0.1
+    },
+    "sysid/04_breakaway.json#4": {
+      "position_rmse": 0.00047543702911274395,
+      "velocity_rmse": 0.030205026244819726,
+      "segment_s": 0.1
+    },
+    "sysid/04_breakaway.json#5": {
+      "position_rmse": 0.00119464621935984,
+      "velocity_rmse": 0.0373724709196616,
+      "segment_s": 0.1
+    },
+    "sysid/04_breakaway.json#6": {
+      "position_rmse": 0.0008279050536790855,
+      "velocity_rmse": 0.03315150481551175,
+      "segment_s": 0.1
+    },
+    "sysid/04_breakaway.json#7": {
+      "position_rmse": 0.0004224478291304279,
+      "velocity_rmse": 0.03184693042819977,
+      "segment_s": 0.1
+    },
+    "sysid/04_breakaway.json#8": {
+      "position_rmse": 0.0008277971787128683,
+      "velocity_rmse": 0.03463050129388312,
+      "segment_s": 0.1
+    }
+  },
+  "direct": {
+    "breakaway_positive": 0.4228120226,
+    "breakaway_negative": 0.3002119833,
+    "measured_over_demand": 0.4627513846779176,
+    "regression_armature": 0.004302890237355262,
+    "regression_coulomb": 0.20418292883321554,
+    "regression_viscous": 0.00878822504473224,
+    "friction_curve": [
+      [
+        -11.757494183579508,
+        -0.4145656344613851
+      ],
+      [
+        -7.882793909064832,
+        -0.35478283557831225
+      ],
+      [
+        -3.986813187768444,
+        -0.279486278544501
+      ],
+      [
+        -2.0065124596119084,
+        -0.2533498317121799
+      ],
+      [
+        -1.0100871223592642,
+        -0.23616778251485498
+      ],
+      [
+        -0.538008150986652,
+        -0.23844767360681038
+      ],
+      [
+        -0.20119431001758684,
+        -0.25070131661161565
+      ],
+      [
+        0.2023746949113886,
+        0.21413523303729515
+      ],
+      [
+        0.5372276109898587,
+        0.2075776822368044
+      ],
+      [
+        0.9905233944529559,
+        0.2172328441609549
+      ],
+      [
+        1.9897097979712226,
+        0.23197777184565857
+      ],
+      [
+        3.9779366576123216,
+        0.25757225807121287
+      ],
+      [
+        7.914576071317548,
+        0.3185780470197876
+      ],
+      [
+        11.751746699296412,
+        0.4058024242771919
+      ]
+    ]
+  }
+}
