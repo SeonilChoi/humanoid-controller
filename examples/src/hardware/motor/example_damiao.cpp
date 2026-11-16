@@ -32,6 +32,7 @@ int main(int argc, char* argv[])
 
     motor_manager::MotorManager motor_manager(argv[1]);
     const int n_motors = motor_manager.number_of_motors();
+    const auto& ids = motor_manager.motor_ids();  // arrays are indexed by motor ID - 1
 
     motor_interface::motor_command_t command[motor_interface::MAX_MOTORS]{};
     motor_interface::motor_state_t status[motor_interface::MAX_MOTORS]{};
@@ -48,9 +49,10 @@ int main(int argc, char* argv[])
 
     motor_manager.read(status);
     double start_position[motor_interface::MAX_MOTORS]{};
-    for (int i = 0; i < n_motors; ++i) {
+    for (int k = 0; k < n_motors; ++k) {
+        const int i = ids[k] - 1;
         start_position[i] = status[i].position;
-        std::printf("Motor %d start position %.4f rad -> goal %.4f rad\n", i, start_position[i], goal_position);
+        std::printf("Motor %d start position %.4f rad -> goal %.4f rad\n", ids[k], start_position[i], goal_position);
     }
 
     const auto t0 = std::chrono::steady_clock::now();
@@ -63,7 +65,8 @@ int main(int argc, char* argv[])
         const double s = (ramp_seconds > 0.0 && t < ramp_seconds) ? 0.5 - 0.5 * std::cos(M_PI * t / ramp_seconds) : 1.0;
         const double ds = (ramp_seconds > 0.0 && t < ramp_seconds) ? 0.5 * M_PI / ramp_seconds * std::sin(M_PI * t / ramp_seconds) : 0.0;
 
-        for (int i = 0; i < n_motors; ++i) {
+        for (int k = 0; k < n_motors; ++k) {
+            const int i = ids[k] - 1;
             const auto& gains = motor_manager.gains(static_cast<uint8_t>(i));
             command[i].position = start_position[i] + (goal_position - start_position[i]) * s;
             command[i].velocity = (goal_position - start_position[i]) * ds;
@@ -76,9 +79,10 @@ int main(int argc, char* argv[])
         if (now - last_print >= std::chrono::milliseconds(100)) {
             last_print = now;
             motor_manager.read(status);
-            for (int i = 0; i < n_motors; ++i) {
+            for (int k = 0; k < n_motors; ++k) {
+                const int i = ids[k] - 1;
                 std::printf("Motor %d | cmd %+.4f | pos %+.4f rad | vel %+.4f rad/s | tau %+.3f Nm | temp %.0f C | err 0x%X\n",
-                            i, command[i].position, status[i].position, status[i].velocity, status[i].torque,
+                            ids[k], command[i].position, status[i].position, status[i].velocity, status[i].torque,
                             status[i].temperature, status[i].error);
             }
             std::printf("\n");

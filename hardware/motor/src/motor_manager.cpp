@@ -71,14 +71,14 @@ void motor_manager::MotorManager::set_homing_offset(uint8_t index) {
 
 void motor_manager::MotorManager::write(const motor_interface::motor_command_t* command) {
     std::lock_guard<std::mutex> lock(mutex_);
-    for (uint8_t i = 0; i < number_of_motors_; ++i) {
+    for (uint8_t i = 0; i < max_index_; ++i) {
         command_[i] = command[i];
     }
 }
 
 void motor_manager::MotorManager::read(motor_interface::motor_state_t* status) {
     std::lock_guard<std::mutex> lock(mutex_);
-    for (uint8_t i = 0; i < number_of_motors_; ++i) {
+    for (uint8_t i = 0; i < max_index_; ++i) {
         status[i] = status_[i];
     }
 }
@@ -122,6 +122,10 @@ void motor_manager::MotorManager::load(const std::string& config_file) {
         for (const auto& motor : motors) {
 	        const unsigned int motor_id_int = motor["id"].as<unsigned int>();
 	        const uint8_t motor_id = static_cast<uint8_t>(motor_id_int);
+            if (motor_id_int == 0 || motor_id_int > motor_interface::MAX_MOTORS) {
+                throw std::runtime_error("[MotorManager::load] Motor ID " + std::to_string(motor_id_int) + " out of range 1.." +
+                                         std::to_string(motor_interface::MAX_MOTORS) + ".");
+            }
 	    
 	        const double gear_ratio = motor["gear_ratio"].as<double>();
             const int8_t axis = motor["axis"].as<int8_t>();
@@ -163,6 +167,8 @@ void motor_manager::MotorManager::load(const std::string& config_file) {
             master_ids_[motor_id - 1] = master_id;
 
             number_of_motors_++;
+            motor_ids_.push_back(motor_id);
+            if (motor_id > max_index_) max_index_ = motor_id;
         }
 
         masters_[master_id]->initialize();

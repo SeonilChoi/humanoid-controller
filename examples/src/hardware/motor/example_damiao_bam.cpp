@@ -114,7 +114,12 @@ Settings load_settings(const fs::path& config_path, const std::string& motor_nam
     if (s.motor_config.is_relative()) s.motor_config = config_path.parent_path() / s.motor_config;
 
     s.loop_period_us = pick<int>(motor, defaults, "loop_period_us", 2000);
-    s.center = (motor["center"] ? motor["center"] : (defaults ? defaults["center"] : YAML::Node()));
+    // (assigning an undefined yaml-cpp node throws: copy only defined ones)
+    if (motor["center"]) {
+        s.center = YAML::Clone(motor["center"]);
+    } else if (defaults && defaults["center"]) {
+        s.center = YAML::Clone(defaults["center"]);
+    }
     s.move_speed = pick<double>(motor, defaults, "move_speed", 1.0);
     s.move_kp = pick<double>(motor, defaults, "move_kp", 10.0);
     s.move_kd = pick<double>(motor, defaults, "move_kd", 0.5);
@@ -133,7 +138,7 @@ Settings load_settings(const fs::path& config_path, const std::string& motor_nam
         s.bam_kp = motor["bam"]["kp"].as<std::vector<double>>();
         s.bam_kd = motor["bam"]["kd"].as<double>();
     }
-    s.sysid = motor["sysid"];
+    if (motor["sysid"]) s.sysid = YAML::Clone(motor["sysid"]);
 
     if (s.loop_period_us < 500) throw std::runtime_error("loop_period_us must be >= 500.");
     if (s.time_scale <= 0.0) throw std::runtime_error("time_scale must be > 0.");
@@ -256,7 +261,7 @@ std::string jnum(double v) {
 class Recorder {
 public:
     Recorder(motor_manager::MotorManager& manager, const Settings& settings)
-    : manager_(manager), s_(settings) {}
+    : manager_(manager), s_(settings), index_(manager.motor_ids().at(0) - 1) {}
 
     void set_center(double center) { center_ = center; }
     double center() const { return center_; }
@@ -265,7 +270,7 @@ public:
     motor_interface::motor_state_t read() {
         motor_interface::motor_state_t status[motor_interface::MAX_MOTORS]{};
         manager_.read(status);
-        return status[0];
+        return status[index_];
     }
 
     void limp() {
@@ -352,11 +357,11 @@ private:
     void write(const Sample& c) {
         motor_interface::motor_command_t cmd[motor_interface::MAX_MOTORS]{};
         if (c.enable) {
-            cmd[0].position = center_ + c.goal;
-            cmd[0].velocity = c.goal_velocity;
-            cmd[0].torque = c.torque_ff;
-            cmd[0].kp = c.kp;
-            cmd[0].kd = c.kd;
+            cmd[index_].position = center_ + c.goal;
+            cmd[index_].velocity = c.goal_velocity;
+            cmd[index_].torque = c.torque_ff;
+            cmd[index_].kp = c.kp;
+            cmd[index_].kd = c.kd;
         }
         manager_.write(cmd);
     }
@@ -380,6 +385,7 @@ private:
 
     motor_manager::MotorManager& manager_;
     const Settings& s_;
+    const int index_;  // command / state array index = motor ID - 1
     double center_{0.0};
     bool aborted_{false};
 };
@@ -454,7 +460,13 @@ int main(int argc, char* argv[]) {
     std::signal(SIGINT, on_sigint);
 
     const fs::path config_path = fs::absolute(args[0]);
-    const Settings settings = load_settings(config_path, args[1]);
+    Settings settings;
+    try {
+        settings = load_settings(config_path, args[1]);
+    } catch (const std::exception& e) {
+        std::cerr << "[bam] config " << config_path.string() << ": " << e.what() << std::endl;
+        return 1;
+    }
     const fs::path session = fs::path(args.size() > 2 ? args[2] : "./damiao_logs") / settings.motor_name / timestamp_string();
     fs::create_directories(session / "bam");
     fs::create_directories(session / "sysid");
@@ -494,7 +506,7 @@ int main(int argc, char* argv[]) {
 
     const double start_position = rec.read().position;
     double center = start_position;
-    if (settings.center && settings.center.as<std::string>() != "current") center = settings.center.as<double>();
+    if (settings.center.IsScalar() && settings.center.as<std::string>() != "current") center = settings.center.as<double>();
     rec.set_center(center);
     std::cout << "[bam] position " << start_position << " rad, center " << center << " rad" << std::endl;
 

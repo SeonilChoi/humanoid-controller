@@ -8,6 +8,7 @@
 #include <thread>
 #include <atomic>
 #include <unordered_map>
+#include <vector>
 
 #include "motor/core/motor_interface.hpp"
 #include "motor/core/motor_master.hpp"
@@ -33,6 +34,9 @@ public:
     void read(motor_interface::motor_state_t* status);
 
     int number_of_motors() { return static_cast<int>(number_of_motors_); }
+
+    // Motor IDs in config order. Command / state arrays are indexed by ID - 1 (IDs need not start at 1).
+    const std::vector<uint8_t>& motor_ids() const { return motor_ids_; }
 
     bool is_running() const { return running_.load(); }
 
@@ -66,6 +70,11 @@ private:
     std::atomic<bool> stopped_{false};
 
     uint8_t number_of_motors_{0};
+
+    // read() / write() copy indices 0 .. max_index_ - 1 (= highest motor ID).
+    uint8_t max_index_{0};
+
+    std::vector<uint8_t> motor_ids_;
 };
 
 } // namespace motor_manager

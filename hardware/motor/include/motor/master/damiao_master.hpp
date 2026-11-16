@@ -59,6 +59,11 @@ constexpr std::size_t SERIAL_RX_SIZE = 16;
 constexpr uint8_t SERIAL_RX_HEADER = 0xAA;
 constexpr uint8_t SERIAL_RX_TAIL = 0x55;
 constexpr uint8_t SERIAL_RX_CAN_FRAME = 0x11;
+// Adapter TX buffer full: wait this long before dropping a frame, this long to finish a started packet, and give up
+// after this many frames dropped in a row.
+constexpr auto SERIAL_TX_WAIT = std::chrono::microseconds(1500);
+constexpr auto SERIAL_TX_PARTIAL_WAIT = std::chrono::milliseconds(200);
+constexpr uint32_t SERIAL_MAX_DROPPED = 500;
 
 // Reply window for one update(), as a fraction of the control period (USB adapters add up to ~1 ms round trip).
 constexpr double UPDATE_TIMEOUT_RATIO = 0.8;
@@ -412,21 +417,41 @@ private:
         packet[18] = frame.dlc;
         std::memcpy(packet + 21, frame.data, frame.dlc);
 
+        // The USB2CAN adapter stalls now and then (USB / CAN bus busy): its TX buffer fills and write() returns
+        // EAGAIN. A packet not started yet is dropped after SERIAL_TX_WAIT (the motor keeps its last command, the
+        // feedback watchdog in update() catches a lasting outage); a packet already started is finished, or the
+        // serial stream would be corrupted.
         std::size_t written = 0;
-        int retries = 0;
+        const auto start = std::chrono::steady_clock::now();
         while (written < SERIAL_TX_SIZE) {
             const ssize_t n = ::write(fd_, packet + written, SERIAL_TX_SIZE - written);
             if (n > 0) {
                 written += static_cast<std::size_t>(n);
                 continue;
             }
-            if (n < 0 && (errno == EAGAIN || errno == EINTR) && ++retries < 100) {
-                pollfd pfd{fd_, POLLOUT, 0};
-                ::poll(&pfd, 1, 1);
-                continue;
+            if (n < 0 && errno != EAGAIN && errno != EINTR) {
+                throw std::runtime_error("[DamiaoMaster::send_frame] Failed to write to " + device_ + ": " + std::strerror(errno));
             }
-            throw std::runtime_error("[DamiaoMaster::send_frame] Failed to write to " + device_ + ": " + std::strerror(errno));
+            const auto waited = std::chrono::steady_clock::now() - start;
+            if (written == 0 && waited > SERIAL_TX_WAIT) {
+                if (++dropped_in_row_ >= SERIAL_MAX_DROPPED) {
+                    throw std::runtime_error("[DamiaoMaster::send_frame] " + device_ + " has not accepted data for " +
+                                             std::to_string(SERIAL_MAX_DROPPED) + " frames (adapter stalled?).");
+                }
+                ++dropped_total_;
+                if ((dropped_total_ & (dropped_total_ - 1)) == 0) {  // 1, 2, 4, 8, ...
+                    std::cerr << "[DamiaoMaster::send_frame] " << device_ << " busy: dropped " << dropped_total_
+                              << " frame(s) so far." << std::endl;
+                }
+                return;
+            }
+            if (written > 0 && waited > SERIAL_TX_PARTIAL_WAIT) {
+                throw std::runtime_error("[DamiaoMaster::send_frame] " + device_ + " stalled in the middle of a packet.");
+            }
+            pollfd pfd{fd_, POLLOUT, 0};
+            ::poll(&pfd, 1, 1);
         }
+        dropped_in_row_ = 0;
     }
 
     // Pops one received CAN frame from the serial stream before `deadline`; false on timeout.
@@ -527,6 +552,10 @@ private:
     int fd_{-1};
 
     bool serial_{false};
+
+    uint32_t dropped_in_row_{0};
+
+    uint64_t dropped_total_{0};
 
     const std::chrono::microseconds update_timeout_;
 
