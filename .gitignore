@@ -21,3 +21,7 @@ sysid_logs/
 
 # example_damiao_bam output
 damiao_logs/
+
+# python
+__pycache__/
+*.pyc
