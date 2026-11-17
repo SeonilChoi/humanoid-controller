@@ -223,10 +223,10 @@ masters:
         kd: 0.5
         axis: -1
         pulse_per_revolution: 65536
-        min: -1.5216
-        max:  0.5
-        homing_direction: -1
-        homing_offset: -1.5216
+        min: -0.7854    # 11-17: free end = URDF ankle_roll limit -45 deg (homing side moved to +27.7 deg)
+        max:  0.4835
+        homing_direction: 1     # 11-17: was -1 (stopper at -87.2 deg)
+        homing_offset: 0.4835    # 11-17: +27.7 deg (was -1.5216 = -87.2 deg)
         homing_velocity: 0.3
         homing_kp: 15.0    # 11-11: raised with the threshold (stall push ~ kp * 0.15 rad lead)
         homing_kd: 0.5
@@ -243,10 +243,10 @@ masters:
         kd: 0.5
         axis: -1
         pulse_per_revolution: 65536
-        min: -1.5216
-        max:  0.5
-        homing_direction: -1
-        homing_offset: -1.5216
+        min: -0.7854    # 11-17: free end = URDF ankle_roll limit -45 deg (homing side moved to +27.7 deg)
+        max:  0.4835
+        homing_direction: 1     # 11-17: was -1 (stopper at -87.2 deg)
+        homing_offset: 0.4835    # 11-17: +27.7 deg (was -1.5216 = -87.2 deg)
         homing_velocity: 0.3
         homing_kp: 15.0    # 11-11: raised with the threshold (stall push ~ kp * 0.15 rad lead)
         homing_kd: 0.5
