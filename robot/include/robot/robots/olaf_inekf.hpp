@@ -27,8 +27,8 @@ public:
     using Vec = Eigen::Matrix<double, DIM, 1>;
 
     struct Params {
-        double gyro_noise{0.02}, accel_noise{0.5}, gyro_bias_noise{0.002}, accel_bias_noise{0.02};
-        double contact_noise{0.05}, fk_noise{0.01};
+        double gyro_noise{0.02}, accel_noise{2.0}, gyro_bias_noise{0.002}, accel_bias_noise{0.02};
+        double contact_noise{0.05}, fk_noise{0.004};
         double init_rot{0.03}, init_vel{0.05}, init_pos{0.01}, init_gyro_bias{0.03}, init_accel_bias{0.2};
     };
 

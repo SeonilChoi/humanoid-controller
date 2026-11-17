@@ -105,13 +105,14 @@ olaf:
   action_rate_limit: 5.24       # rad/s
   # state estimate: contact-aided invariant EKF (robot::OlafInEKF = training olaf/inekf.py, ArtiH1OlafEnvCfg.ekf_*)
   contact_tolerance: 0.012      # m, est_contact_tolerance
+  # values chosen on the real KB logs (arti_h1_olaf scripts/real2sim/inekf_real_logs.py)
   ekf:
     gyro_noise: 0.02            # rad/s/sqrt(Hz)
-    accel_noise: 0.5            # m/s^2/sqrt(Hz)
+    accel_noise: 2.0            # m/s^2/sqrt(Hz) (real logs: touchdown impacts)
     gyro_bias_noise: 0.002
     accel_bias_noise: 0.02
     contact_noise: 0.05         # m/s/sqrt(Hz), sole slip
-    fk_noise: 0.01              # m
+    fk_noise: 0.004             # m
     init_rot: 0.03
     init_vel: 0.05
     init_pos: 0.01
