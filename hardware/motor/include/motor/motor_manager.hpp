@@ -1,6 +1,7 @@
 #ifndef MOTOR_MOTOR_MANAGER_HPP_
 #define MOTOR_MOTOR_MANAGER_HPP_
 
+#include <chrono>
 #include <mutex>
 #include <string>
 #include <cstdint>
@@ -29,6 +30,12 @@ public:
     void set_homing_offset(uint8_t index);
 
     void write(const motor_interface::motor_command_t* command);
+
+    // Olaf (Disney, arXiv 2512.16705, Sec. VII-C) target smoothing inside each master thread: first-order hold (linear
+    // ramp of the commanded position from the value at the previous write() to the new one over control_dt) and / or a
+    // first-order low-pass at cutoff_hz evaluated at the master's own period. Only the position is smoothed; kp / kd /
+    // velocity / torque pass through. Off by default; enabling resets the ramp / filter to the current command.
+    void set_target_smoothing(bool first_order_hold, double control_dt, double cutoff_hz);
 
     void read(motor_interface::motor_state_t* status);
 
@@ -74,6 +81,17 @@ private:
     mutable std::atomic<std::int64_t> last_comm_error_{0};
 
     std::atomic<bool> stopped_{false};
+
+    bool smooth_foh_{false};
+    double smooth_dt_{0.0};
+    double smooth_cutoff_hz_{0.0};
+    std::chrono::steady_clock::time_point smooth_write_time_{};
+    double smooth_from_[motor_interface::MAX_MOTORS]{};
+    double smooth_to_[motor_interface::MAX_MOTORS]{};
+    double smooth_filtered_[motor_interface::MAX_MOTORS]{};
+    bool smooth_filter_init_[motor_interface::MAX_MOTORS]{};
+
+    double smoothed_position(uint8_t index, std::chrono::steady_clock::time_point now) const;
 
     uint8_t number_of_motors_{0};
 };

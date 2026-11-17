@@ -118,6 +118,13 @@ policy:
   # 11-11 real run without it: 30 Hz joint chatter while standing. Sim r12 with 0.6: 0 falls, chatter 3-5x lower.
   # MUST match the model's training value: kb11 / kb10 / r21 / r12-r16 0.6 (kb08 0.35, withdrawn).
   target_lowpass_alpha: 0.6
+  # Olaf (Disney, arXiv 2512.16705) actuator-rate smoothing inside the motor threads: first-order hold (ramp from the
+  # previous to the new joint target over control_dt instead of holding it) + low-pass at target_substep_lowpass_hz
+  # (paper 37.5 Hz), at each master's own rate. MUST match the model's training (sim cfg target_foh /
+  # target_substep_lowpass_hz): kb11 / kb10 / r21 were trained WITHOUT it (false / 0); only models trained with it
+  # (kb14 on) may turn it on. Adds ~12 ms of target lag.
+  target_foh: false
+  target_substep_lowpass_hz: 0.0
   control_dt: 0.0166666667
   # no gait clock in this policy (kept for the shared parser; the clock is logged but not observed)
   gait_phase_rate: 0.0

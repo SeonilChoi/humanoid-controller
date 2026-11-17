@@ -1,4 +1,6 @@
 #include <iostream>
+#include <cmath>
+#include <algorithm>
 #include <string>
 #include <cstdint>
 #include <stdexcept>
@@ -70,8 +72,33 @@ void motor_manager::MotorManager::set_homing_offset(uint8_t index) {
 
 void motor_manager::MotorManager::write(const motor_interface::motor_command_t* command) {
     std::lock_guard<std::mutex> lock(mutex_);
+    const auto now = std::chrono::steady_clock::now();
     for (uint8_t i = 0; i < number_of_motors_; ++i) {
+        if (smooth_foh_) {
+            // ramp start = where the ramp is now (= the previous target once a full control step has passed)
+            smooth_from_[i] = smoothed_position(i, now);
+            smooth_to_[i] = command[i].position;
+        }
         command_[i] = command[i];
+    }
+    if (smooth_foh_) smooth_write_time_ = now;
+}
+
+double motor_manager::MotorManager::smoothed_position(uint8_t index, std::chrono::steady_clock::time_point now) const {
+    if (!smooth_foh_ || smooth_dt_ <= 0.0) return command_[index].position;
+    const double s = std::clamp(std::chrono::duration<double>(now - smooth_write_time_).count() / smooth_dt_, 0.0, 1.0);
+    return smooth_from_[index] + s * (smooth_to_[index] - smooth_from_[index]);
+}
+
+void motor_manager::MotorManager::set_target_smoothing(bool first_order_hold, double control_dt, double cutoff_hz) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    smooth_foh_ = first_order_hold && control_dt > 0.0;
+    smooth_dt_ = control_dt;
+    smooth_cutoff_hz_ = cutoff_hz > 0.0 ? cutoff_hz : 0.0;
+    smooth_write_time_ = std::chrono::steady_clock::now();
+    for (uint8_t i = 0; i < number_of_motors_; ++i) {
+        smooth_from_[i] = smooth_to_[i] = command_[i].position;
+        smooth_filter_init_[i] = false;
     }
 }
 
@@ -188,9 +215,26 @@ void motor_manager::MotorManager::run(uint8_t id) {
 
             {
                 std::lock_guard<std::mutex> lock(mutex_);
+                const auto now = std::chrono::steady_clock::now();
+                // low-pass coefficient at this master's period (0 = off)
+                const double lp_alpha = smooth_cutoff_hz_ > 0.0
+                    ? 1.0 - std::exp(-2.0 * M_PI * smooth_cutoff_hz_ * master.period() * 1.0e-6) : 1.0;
                 for (uint8_t i = 0; i < num_ids; ++i) {
-                    command[i] = command_[motor_ids[i] - 1];
-                    status[i] = status_[motor_ids[i] - 1];
+                    const uint8_t index = motor_ids[i] - 1;
+                    command[i] = command_[index];
+                    status[i] = status_[index];
+                    if (smooth_foh_ || lp_alpha < 1.0) {
+                        double position = smoothed_position(index, now);
+                        if (lp_alpha < 1.0) {
+                            if (!smooth_filter_init_[index]) {
+                                smooth_filtered_[index] = position;
+                                smooth_filter_init_[index] = true;
+                            }
+                            smooth_filtered_[index] += lp_alpha * (position - smooth_filtered_[index]);
+                            position = smooth_filtered_[index];
+                        }
+                        command[i].position = position;
+                    }
                 }
             }
 

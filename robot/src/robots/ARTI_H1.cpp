@@ -148,6 +148,11 @@ robot::ArtiH1::ArtiH1(const std::string& config_file, const std::string& model_f
     }
     std::cout << "[ArtiH1] joint target low-pass alpha: " << target_lowpass_alpha_
               << (target_lowpass_alpha_ < 1.0 ? "" : " (off)") << std::endl;
+    if (policy["target_foh"]) target_foh_ = policy["target_foh"].as<bool>();
+    if (policy["target_substep_lowpass_hz"]) target_substep_lowpass_hz_ = policy["target_substep_lowpass_hz"].as<double>();
+    std::cout << "[ArtiH1] actuator-rate target smoothing: first-order hold " << (target_foh_ ? "on" : "off")
+              << ", low-pass " << (target_substep_lowpass_hz_ > 0.0 ? std::to_string(target_substep_lowpass_hz_) + " Hz"
+                                                                    : std::string("off")) << std::endl;
     std::cout << "[ArtiH1] joint target rate limit: "
               << (target_rate_limit_ > 0.0 ? std::to_string(target_rate_limit_) + " rad/s" : std::string("off"))
               << std::endl;
@@ -889,6 +894,11 @@ void robot::ArtiH1::control() {
         return;
     }
     if (!observation_.empty()) {
+        if (!target_smoothing_on_ && (target_foh_ || target_substep_lowpass_hz_ > 0.0)) {
+            // from the current command (the hold / stance pose), so the first policy target ramps in
+            motor_manager_->set_target_smoothing(target_foh_, control_dt_, target_substep_lowpass_hz_);
+            target_smoothing_on_ = true;
+        }
         // action_ = q_des (rad, policy order): default pose + scaled action + nominal gait at the next clock
         // phase, clamped to the training joint limits (hip_roll +-15 deg).
         controller_->update(observation_, action_);

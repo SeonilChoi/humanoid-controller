@@ -98,6 +98,12 @@ private:
     // the joint target becomes previous + alpha * (q_des - previous). 11-11 r12 run: without it the joints chattered
     // at 30 Hz (period-2 limit cycle between the policy and the fast real joints).
     double target_lowpass_alpha_{1.0};
+    // Olaf-style actuator-rate smoothing in the motor threads (robot.yaml policy.target_foh / target_substep_lowpass_hz,
+    // must match the sim cfg target_foh / target_substep_lowpass_hz the model was trained with); enabled at the first
+    // policy step (homing is not smoothed)
+    bool target_foh_{false};
+    double target_substep_lowpass_hz_{0.0};
+    bool target_smoothing_on_{false};
 
     std::size_t observation_size_{116};
 
