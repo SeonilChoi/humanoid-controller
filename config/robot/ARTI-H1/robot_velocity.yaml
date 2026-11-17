@@ -6,7 +6,16 @@ joy_handler_config_file: ../config/robot/ARTI-H1/joy.yaml
 urdf_file: ../config/robot/ARTI-H1/robot.urdf
 # Velocity-command policy (no gait clock, no AMP): run with
 #   ./ARTI-H1 ../config/robot/ARTI-H1/robot_velocity.yaml
-# agent_vel_kb10_240000.onnx (11-16, default) = knee-bent (KB) line round kb10, arti_h1_local
+# agent_vel_kb11_480000.onnx (11-17, default) = KB line round kb11, arti_h1_local Template-Arti-H1-Velocity-KB-Direct-v0
+# (run logs/skrl/arti_h1_velocity/2026-11-16_14-23-15_ppo_torch agent_480000), fine-tuned from kb10: pure-sideways
+# commands 15 -> 25 %, vy range +-0.08 -> +-0.12, sharper lateral / yaw tracking, stronger stand-still-under-command
+# penalty, straight_drift -1000. Same obs / stance / zero / low-pass 0.6 / gyro noise as kb10: only model_file changes.
+# Sim eval, same conditions (current real2sim delays + DR):
+#            falls  push-falls  tilt rms  body rate xy  vx    vy (L/R of 0.08)   yaw s/l    straight |vy|/vx  |lean| walk  gyro gain
+#   kb11     0      2.3 %       2.92 deg  0.406 rad/s   0.65  0.29 (32 / 26 %)  0.85/0.86  9.8 %             1.01 deg     1.16
+#   kb10     0      0.8 %       3.03 deg  0.396 rad/s   0.64  0.25 (26 / 25 %)  0.80/0.79  9.5 %             1.06 deg     1.16
+#   -> better sideways (left) and turn tracking, less lean; same speed and gyro gain; slightly more push falls (limit 4.7 %).
+# agent_vel_kb10_240000.onnx (11-16) = knee-bent (KB) line round kb10, arti_h1_local
 # Template-Arti-H1-Velocity-KB-Direct-v0 (same patched USD, stance and -20/40/-20 zero as r21; run
 # logs/skrl/arti_h1_velocity/2026-11-16_09-51-00_ppo_torch agent_240000), fine-tuned from kb05 with the joint target
 # low-pass kept at 0.6 (same as r21, nothing else to change), MTi-3 gyro noise 0.04 rad/s + bias +-0.03 rad/s (to keep
@@ -45,7 +54,8 @@ urdf_file: ../config/robot/ARTI-H1/robot.urdf
 # delays and target low-pass 0.6.
 # Sim eval with joint zero errors: vx 0.65 / vy 0.26 / yaw small 0.80 / large 0.82, 1 fall without pushes (arc),
 #   4.7 % kick falls (r16: 7.0 %), fwd-kick falls 9.4 % (r16-r20: ~14 %), tilt rms 3.7 deg.
-model_file: ../config/robot/ARTI-H1/agent_vel_kb10_240000.onnx
+model_file: ../config/robot/ARTI-H1/agent_vel_kb11_480000.onnx
+# model_file: ../config/robot/ARTI-H1/agent_vel_kb10_240000.onnx   # kb10: target_lowpass_alpha 0.6 (same)
 # model_file: ../config/robot/ARTI-H1/agent_vel_r21_240000.onnx   # r21: target_lowpass_alpha 0.6 (same)
 # model_file: ../config/robot/ARTI-H1/agent_vel_kb08_240000.onnx   # kb08 (withdrawn): needs target_lowpass_alpha 0.35
 # Per-control-step CSV (observation, ONNX q_des / actions, motor states, raw IMU) written to
@@ -106,7 +116,7 @@ policy:
   target_rate_limit: 5.24
   # joint target low-pass, before the rate limit: target = previous + alpha * (q_des - previous); 1 = off.
   # 11-11 real run without it: 30 Hz joint chatter while standing. Sim r12 with 0.6: 0 falls, chatter 3-5x lower.
-  # MUST match the model's training value: kb10 / r21 / r12-r16 0.6 (kb08 0.35, withdrawn).
+  # MUST match the model's training value: kb11 / kb10 / r21 / r12-r16 0.6 (kb08 0.35, withdrawn).
   target_lowpass_alpha: 0.6
   control_dt: 0.0166666667
   # no gait clock in this policy (kept for the shared parser; the clock is logged but not observed)
