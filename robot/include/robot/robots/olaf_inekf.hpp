@@ -11,6 +11,7 @@
 //   correct(s, contact): forward kinematics s_i = R^T (d_i - p) of each sole in contact; a sole that touches down is
 //   (re)initialised at p + R s_i with the covariance of p; a sole in the air stays in the state unused.
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 
@@ -50,13 +51,13 @@ public:
         P0_ = p0.asDiagonal();
     }
 
-    // Start at attitude R0, zero velocity / biases, the body origin above the soles s (body frame) with their mean
-    // height at ground_z, x / y = 0, both soles in contact.
+    // Start at attitude R0, zero velocity / biases, the body origin above the soles s (body frame) with the lowest one
+    // at ground_z, x / y = 0; both soles augmented, the next correct() measures only those in contact.
     void reset(const Eigen::Matrix3d& R0, const std::array<Eigen::Vector3d, 2>& s, double ground_z = 0.0) {
         R_ = R0;
         v_.setZero();
         p_.setZero();
-        p_.z() = ground_z - 0.5 * ((R0 * s[0]).z() + (R0 * s[1]).z());
+        p_.z() = ground_z - std::min((R0 * s[0]).z(), (R0 * s[1]).z());   // lowest sole on the ground (mid-stride starts)
         bg_.setZero();
         ba_.setZero();
         P_ = P0_;
