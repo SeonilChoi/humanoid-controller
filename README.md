@@ -178,6 +178,38 @@ with the right foot placed as the mirror image of the left. Every 0.5 s it print
 angles, right - left, and the right motor's homing_offset now -> suggested (offset - (right - left)). Copy the
 suggestion into motor.yaml once the numbers are steady, home again and check that the right sole now touches.
 
+**Branch `arti-h1-olaf`**: the Olaf method (arXiv 2512.16705; training project
+[ARTI-H1-Olaf](https://github.com/SeonilChoi/ARTI-H1-Olaf)) on the KB robot, with separate walking and standing
+policies:
+
+```bash
+./ARTI-H1 ../config/robot/ARTI-H1/robot_olaf.yaml            # starts STAND; pad cross = WALK, circle = STAND
+./ARTI-H1 ../config/robot/ARTI-H1/robot_olaf.yaml --observe  # check the state estimate / observation (no policy)
+```
+
+`policy.observation: olaf` loads two ONNX models: `model_file` (walking, 80-D obs) and `olaf.stand_model_file`
+(standing, 79-D). Both observe the pelvis pose and velocity relative to a *path frame*, so the controller runs:
+
+* a state estimate (`ArtiH1::olaf_estimate`): the IMU attitude plus the leg kinematics. Each sole in contact is held
+  where it touched down; contact means within 12 mm of the lowest sole. The pelvis position is the anchor minus R·FK,
+  and the velocity is a low-passed difference of it.
+* the path frame and the clock (`olaf_advance`). WALK integrates the stick path velocity. STAND converges to the
+  feet midpoint with τ 0.5 s. Either way the frame is kept within 0.10 m / 0.35 rad of the pelvis.
+
+The training env builds the actor observation with the same estimator, so the policy is trained on it. Motor
+temperatures are observed, clipped to [70, 85] °C (below 70 °C they all read −1).
+
+Stick mapping:
+
+| Mode | Control |
+|---|---|
+| WALK | Left stick: vx / vy. Right stick left/right: turn. Ranges vx −0.12..0.15 m/s, vy ±0.068 m/s, wz ±0.4 rad/s, projected onto the reference clips as in training |
+| STAND | Left stick: trunk pitch / roll. Right stick: trunk yaw / height (dz −3..+1.5 cm) |
+
+The CSV adds the columns `olaf_walk`, `est_*`, `path_*`, `contact_l/r` and `g0..g3`. The ONNX files come from
+`scripts/export_onnx.py` in the training project (`agent_olaf_walk.onnx`, `agent_olaf_stand.onnx`,
+`olaf_walk_keys.yaml`).
+
 `--ppo` / `--model` combine with `--blind-imu` and `--observe`. With `--ppo` / `--model` the log file name includes
 the model name, so AMP and PPO runs stay apart.
 

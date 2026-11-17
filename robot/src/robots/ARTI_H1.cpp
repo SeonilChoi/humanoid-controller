@@ -34,6 +34,9 @@ constexpr std::size_t VELOCITY_OBSERVATION_SIZE = 45;
 // obs_action_history: gyro 3, gravity 3, joint pos - default 12, joint vel 12, actions a(t), a(t-1), a(t-2) 36,
 // joint target - default 12, command 3 (robot.yaml policy.observation: velocity_history).
 constexpr std::size_t VELOCITY_HISTORY_OBSERVATION_SIZE = 81;
+// arti_h1_olaf ArtiH1OlafEnv (robot.yaml policy.observation: olaf): walking 80, standing 79 (see ARTI_H1.hpp).
+constexpr std::size_t OLAF_WALK_OBSERVATION_SIZE = 80;
+constexpr std::size_t OLAF_STAND_OBSERVATION_SIZE = 79;
 constexpr auto STAND_UP_TIME = std::chrono::seconds(3);
 constexpr double PI = 3.14159265358979323846;
 
@@ -130,17 +133,52 @@ robot::ArtiH1::ArtiH1(const std::string& config_file, const std::string& model_f
         } else if (type == "velocity_history") {
             velocity_obs_ = true;
             action_history_obs_ = true;
+        } else if (type == "olaf") {
+            olaf_obs_ = true;
         } else if (type != "amp") {
             throw std::runtime_error(
-                "[ArtiH1::ArtiH1] robot.yaml policy.observation must be 'amp', 'velocity' or 'velocity_history'.");
+                "[ArtiH1::ArtiH1] robot.yaml policy.observation must be 'amp', 'velocity', 'velocity_history' or 'olaf'.");
         }
     }
-    observation_size_ = action_history_obs_ ? VELOCITY_HISTORY_OBSERVATION_SIZE
-                        : velocity_obs_     ? VELOCITY_OBSERVATION_SIZE
-                                            : OBSERVATION_SIZE;
+    observation_size_ = olaf_obs_            ? OLAF_WALK_OBSERVATION_SIZE   // log width; standing pads one column
+                        : action_history_obs_ ? VELOCITY_HISTORY_OBSERVATION_SIZE
+                        : velocity_obs_       ? VELOCITY_OBSERVATION_SIZE
+                                              : OBSERVATION_SIZE;
     std::cout << "[ArtiH1] observation: "
-              << (action_history_obs_ ? "velocity_history (81)" : velocity_obs_ ? "velocity (45)" : "amp (116)")
+              << (olaf_obs_ ? "olaf (walk 80 / stand 79)"
+                  : action_history_obs_ ? "velocity_history (81)" : velocity_obs_ ? "velocity (45)" : "amp (116)")
               << std::endl;
+    if (olaf_obs_) {
+        const YAML::Node olaf = YAML::LoadFile(config_file)["olaf"];
+        if (!olaf) throw std::runtime_error("[ArtiH1::ArtiH1] policy.observation olaf needs an 'olaf' section.");
+        olaf_stand_controller_ = std::make_unique<controller::AmpController>(olaf["stand_model_file"].as<std::string>());
+        olaf_stand_controller_->initialize();
+        olaf_walk_period_ = olaf["walk_period"].as<double>();
+        olaf_walk_start_phase_ = olaf["walk_start_phase"].as<double>();
+        olaf_path_max_distance_ = olaf["path_max_distance"].as<double>();
+        olaf_path_max_yaw_ = olaf["path_max_yaw"].as<double>();
+        olaf_stand_path_tau_ = olaf["stand_path_tau"].as<double>();
+        const auto clip = olaf["thermal_clip"].as<std::vector<double>>();
+        olaf_thermal_clip_ = {clip.at(0), clip.at(1)};
+        const auto walk_range = olaf["walk_command_range"].as<std::vector<std::vector<double>>>();
+        const auto stand_range = olaf["stand_command_range"].as<std::vector<std::vector<double>>>();
+        if (walk_range.size() != 3 || stand_range.size() != 4) {
+            throw std::runtime_error("[ArtiH1::ArtiH1] olaf.walk_command_range needs 3, stand_command_range 4 [min, max] pairs.");
+        }
+        for (std::size_t i = 0; i < 3; ++i) olaf_walk_range_[i] = {walk_range[i].at(0), walk_range[i].at(1)};
+        for (std::size_t i = 0; i < 4; ++i) olaf_stand_range_[i] = {stand_range[i].at(0), stand_range[i].at(1)};
+        olaf_stand_rate_ = read_array<4>(olaf, "stand_command_rate");
+        olaf_knn_ = olaf["reference_knn"].as<int>();
+        if (olaf["contact_tolerance"]) olaf_contact_tolerance_ = olaf["contact_tolerance"].as<double>();
+        if (olaf["velocity_tau"]) olaf_velocity_tau_ = olaf["velocity_tau"].as<double>();
+        const auto keys = YAML::LoadFile(olaf["walk_keys_file"].as<std::string>())["walk_keys"]
+                              .as<std::vector<std::vector<double>>>();
+        for (const auto& k : keys) olaf_walk_keys_.push_back({k.at(0), k.at(1), k.at(2)});
+        if (olaf_walk_keys_.empty()) throw std::runtime_error("[ArtiH1::ArtiH1] olaf.walk_keys_file has no walk_keys.");
+        std::cout << "[ArtiH1] olaf: walk model " << model_file_ << ", stand model "
+                  << olaf["stand_model_file"].as<std::string>() << ", " << olaf_walk_keys_.size()
+                  << " walk reference keys. Pad: cross = walk, circle = stand (starts standing)." << std::endl;
+    }
     if (policy["target_rate_limit"]) target_rate_limit_ = policy["target_rate_limit"].as<double>();
     if (policy["target_lowpass_alpha"]) target_lowpass_alpha_ = policy["target_lowpass_alpha"].as<double>();
     if (!(target_lowpass_alpha_ > 0.0 && target_lowpass_alpha_ <= 1.0)) {
@@ -203,6 +241,12 @@ robot::ArtiH1::ArtiH1(const std::string& config_file, const std::string& model_f
             for (const char* name : kPolicyJointNames) std::fprintf(log_file_, ",err_%s", name);
             // fault bits: 1 IMU stopped, 2 motor link, 4 joystick lost, 8 holding (policy stopped, pose held)
             std::fprintf(log_file_, ",fault");
+            // olaf: mode (1 walk, 0 stand), estimated pelvis position / velocity (estimator world frame), path frame,
+            // estimated foot contacts, control input g (walk: vx vy wz, stand: dz roll pitch yaw)
+            if (olaf_obs_) {
+                std::fprintf(log_file_, ",olaf_walk,est_x,est_y,est_z,est_vx,est_vy,est_vz,path_x,path_y,path_psi,"
+                                        "contact_l,contact_r,g0,g1,g2,g3");
+            }
             std::fprintf(log_file_, "\n");
             std::cout << "[ArtiH1] Logging every control step to " << path << std::endl;
         }
@@ -231,6 +275,24 @@ robot::ArtiH1::~ArtiH1() {
 void robot::ArtiH1::print_observation() const {
     const auto& o = observation_;
     constexpr double DEG = 180.0 / PI;
+    if (olaf_obs_) {
+        if (o.size() < OLAF_STAND_OBSERVATION_SIZE) return;
+        std::printf("\n[observe] olaf %s | pelvis in path frame x %+.3f y %+.3f height %+.4f m | path R row-major "
+                    "(%+.2f %+.2f / %+.2f %+.2f / %+.2f %+.2f)\n", olaf_walking_ ? "WALK" : "STAND", o[0], o[1], o[2],
+                    o[3], o[4], o[5], o[6], o[7], o[8]);
+        std::printf("[observe] pelvis vel (pelvis frame) %+.3f %+.3f %+.3f m/s | gyro %+.3f %+.3f %+.3f rad/s | "
+                    "contact L %d R %d | est pos %+.3f %+.3f %+.3f | path %+.3f %+.3f %+.1f deg\n", o[9], o[10], o[11],
+                    o[12], o[13], o[14], olaf_contact_[0] ? 1 : 0, olaf_contact_[1] ? 1 : 0, olaf_pos_.x(), olaf_pos_.y(),
+                    olaf_pos_.z(), olaf_path_[0], olaf_path_[1], olaf_path_[2] * DEG);
+        std::printf("[observe] joint               pos-default(deg)  vel(rad/s)  temp obs\n");
+        for (std::size_t i = 0; i < NUM_JOINTS; ++i) {
+            std::printf("[observe]   %-18s %+8.2f          %+7.3f     %+.2f\n", kPolicyJointNames[i], o[15 + i] * DEG,
+                        o[27 + i], o[63 + i]);
+        }
+        std::printf("[observe] g (%+.3f %+.3f %+.3f %+.3f)\n", olaf_g_[0], olaf_g_[1], olaf_g_[2], olaf_g_[3]);
+        std::fflush(stdout);
+        return;
+    }
     if (velocity_obs_) {
         if (o.size() != observation_size_) return;
         const std::size_t c = o.size() - 3;   // command index
@@ -335,6 +397,7 @@ void robot::ArtiH1::write_log_row() {
     const double t = std::chrono::duration<double>(std::chrono::steady_clock::now() - log_start_).count();
     std::fprintf(log_file_, "%.4f,%.5f", t, gait_phase_);
     for (const double v : observation_) std::fprintf(log_file_, ",%.7g", v);   // full precision: replayed through ONNX
+    for (std::size_t i = observation_.size(); i < observation_size_; ++i) std::fprintf(log_file_, ",nan");
     // --observe mode has no policy output: q_des / action columns are nan there
     const bool policy_ran = action_.size() == NUM_JOINTS;
     for (std::size_t i = 0; i < NUM_JOINTS; ++i) {
@@ -356,6 +419,12 @@ void robot::ArtiH1::write_log_row() {
         std::fprintf(log_file_, ",%d", last_motor_status_[joint_id_to_motor_index_.at(kinematics_->joint_id(name))].error);
     }
     std::fprintf(log_file_, ",%d", fault_);
+    if (olaf_obs_) {
+        std::fprintf(log_file_, ",%d,%.6g,%.6g,%.6g,%.6g,%.6g,%.6g,%.6g,%.6g,%.6g,%d,%d,%.6g,%.6g,%.6g,%.6g",
+                     olaf_walking_ ? 1 : 0, olaf_pos_.x(), olaf_pos_.y(), olaf_pos_.z(), olaf_vel_.x(), olaf_vel_.y(),
+                     olaf_vel_.z(), olaf_path_[0], olaf_path_[1], olaf_path_[2], olaf_contact_[0] ? 1 : 0,
+                     olaf_contact_[1] ? 1 : 0, olaf_g_[0], olaf_g_[1], olaf_g_[2], olaf_g_[3]);
+    }
     std::fprintf(log_file_, "\n");
 }
 
@@ -466,6 +535,12 @@ void robot::ArtiH1::initialize() {
     previous_actions2_.fill(0.0);
     previous_actions3_.fill(0.0);
     q_target_ = default_pose_;   // the env resets its joint target to the default pose
+    // olaf: start standing (nominal standing reference = the default stance), estimator re-anchors on the first step
+    olaf_walking_ = false;
+    olaf_est_init_ = false;
+    olaf_g_.fill(0.0);
+    olaf_g_target_.fill(0.0);
+    olaf_phase_ = olaf_walk_start_phase_;
 }
 
 void robot::ArtiH1::home(uint8_t index) {
@@ -730,6 +805,82 @@ void robot::ArtiH1::observation() {
     const Eigen::Vector3d angular_velocity_heading =
         blind_imu_ ? Eigen::Vector3d(Eigen::Vector3d::Zero()) : Eigen::Vector3d(heading_R_world * angular_velocity_world);
 
+    if (olaf_obs_) {
+        olaf_estimate(world_R_root);
+        joy_interface::joy_data_t joy_data{};
+        joy_handler_->read(joy_data);
+        // policy switch on the pad (paper: the Animation Engine switches policies): cross = walk, circle = stand
+        if (joy_data.cross && !olaf_prev_cross_ && !olaf_walking_) {
+            olaf_walking_ = true;
+            olaf_phase_ = olaf_walk_start_phase_;   // training: walking episodes from the stance start at this phase
+            olaf_reset_path();
+            std::cout << "[ArtiH1] olaf: WALK policy" << std::endl;
+        } else if (joy_data.circle && !olaf_prev_circle_ && olaf_walking_) {
+            olaf_walking_ = false;
+            olaf_reset_path();                      // training: standing episodes from mid-stride start at the torso
+            std::cout << "[ArtiH1] olaf: STAND policy" << std::endl;
+        }
+        olaf_prev_cross_ = joy_data.cross;
+        olaf_prev_circle_ = joy_data.circle;
+        const auto dead = [this](double v) { return std::abs(v) < stick_deadzone_ ? 0.0 : v; };
+        // stick in [-1, 1] -> [min, max] of the training range (0 stays 0)
+        const auto span = [](double v, const std::array<double, 2>& r) { return v >= 0.0 ? v * r[1] : -v * r[0]; };
+        if (olaf_walking_) {
+            const std::array<double, 3> g{span(dead(joy_data.stick_ly), olaf_walk_range_[0]),
+                                          span(-dead(joy_data.stick_lx), olaf_walk_range_[1]),
+                                          span(-dead(joy_data.stick_rx), olaf_walk_range_[2])};
+            const auto p = olaf_project_walk(g);   // onto the reference coverage, as the env samples g
+            olaf_g_ = {p[0], p[1], p[2], 0.0};
+            command_ = p;
+        } else {
+            // left stick: pitch (push = nose down, +pitch) / roll (right = lean right, +roll), right stick: yaw (right =
+            // turn right, -yaw) / height (up = higher, +dz); same Euler ZYX convention as the IK grid
+            olaf_g_target_ = {span(dead(joy_data.stick_ry), olaf_stand_range_[0]),
+                              span(dead(joy_data.stick_lx), olaf_stand_range_[1]),
+                              span(dead(joy_data.stick_ly), olaf_stand_range_[2]),
+                              span(-dead(joy_data.stick_rx), olaf_stand_range_[3])};
+            command_ = {0.0, 0.0, 0.0};
+        }
+        // pelvis pose / velocity relative to the path frame
+        const double psi = olaf_path_[2];
+        const double c = std::cos(psi), s = std::sin(psi);
+        const double dx = olaf_pos_.x() - olaf_path_[0], dy = olaf_pos_.y() - olaf_path_[1];
+        observation_.push_back(c * dx + s * dy);                       // [0:3] position in the path frame, height
+        observation_.push_back(-s * dx + c * dy);
+        observation_.push_back(olaf_pos_.z());
+        const Eigen::Matrix3d path_R_root = Eigen::AngleAxisd(-psi, Eigen::Vector3d::UnitZ()).toRotationMatrix() * world_R_root;
+        for (int r = 0; r < 3; ++r) {                                   // [3:9] first two columns, row-major
+            observation_.push_back(path_R_root(r, 0));
+            observation_.push_back(path_R_root(r, 1));
+        }
+        append_vector(world_R_root.transpose() * olaf_vel_, observation_);   // [9:12] pelvis frame velocity
+        append_vector(root_R_imu * angular_velocity_imu, observation_);      // [12:15] gyro, pelvis frame
+        for (std::size_t i = 0; i < NUM_JOINTS; ++i) {                 // [15:27] joint pos - default pose
+            const auto joint_id = kinematics_->joint_id(kPolicyJointNames[i]);
+            observation_.push_back(motor_status[joint_id_to_motor_index_.at(joint_id)].position - default_pose_[i]);
+        }
+        for (const char* name : kPolicyJointNames) {                   // [27:39] joint velocities
+            observation_.push_back(motor_status[joint_id_to_motor_index_.at(kinematics_->joint_id(name))].velocity);
+        }
+        for (const double action : previous_actions_) observation_.push_back(action);    // [39:51] a(t)
+        for (const double action : previous_actions2_) observation_.push_back(action);   // [51:63] a(t-1)
+        const double t_mid = 0.5 * (olaf_thermal_clip_[0] + olaf_thermal_clip_[1]);
+        const double t_half = 0.5 * (olaf_thermal_clip_[1] - olaf_thermal_clip_[0]);
+        for (const char* name : kPolicyJointNames) {                   // [63:75] motor temperatures
+            const double temp = motor_status[joint_id_to_motor_index_.at(kinematics_->joint_id(name))].temperature;
+            observation_.push_back((std::clamp(temp, olaf_thermal_clip_[0], olaf_thermal_clip_[1]) - t_mid) / t_half);
+        }
+        if (olaf_walking_) {
+            observation_.push_back(std::cos(2.0 * PI * olaf_phase_));   // [75:77] gait phase
+            observation_.push_back(std::sin(2.0 * PI * olaf_phase_));
+            for (std::size_t i = 0; i < 3; ++i) observation_.push_back(olaf_g_[i]);   // [77:80] path velocity
+        } else {
+            for (std::size_t i = 0; i < 4; ++i) observation_.push_back(olaf_g_[i]);   // [75:79] torso dz roll pitch yaw
+        }
+        gait_phase_ = olaf_walking_ ? olaf_phase_ : 0.0;   // logged in the 'phase' column
+        return;
+    }
+
     if (velocity_obs_) {
         // ArtiH1VelocityEnv: the sim IMU sits on the pelvis with identity orientation, so its gyro and gravity are in
         // the pelvis frame (root_R_imu maps the real sensor axes onto it).
@@ -891,7 +1042,9 @@ void robot::ArtiH1::control() {
     if (!observation_.empty()) {
         // action_ = q_des (rad, policy order): default pose + scaled action + nominal gait at the next clock
         // phase, clamped to the training joint limits (hip_roll +-15 deg).
-        controller_->update(observation_, action_);
+        controller::AmpController* active = amp_controller_;
+        if (olaf_obs_ && !olaf_walking_) active = olaf_stand_controller_.get();
+        active->update(observation_, action_);
         // ArtiH1VelocityEnv._pre_physics_step: low-pass and slew limit against the previous target, then remember it.
         for (std::size_t i = 0; i < NUM_JOINTS; ++i) {
             if (target_lowpass_alpha_ < 1.0) action_[i] = q_target_[i] + target_lowpass_alpha_ * (action_[i] - q_target_[i]);
@@ -909,7 +1062,7 @@ void robot::ArtiH1::control() {
             motor_command_[motor_index].kd = policy_kd_[motor_index];
         }
 
-        const auto& actions = amp_controller_->policy_actions();
+        const auto& actions = active->policy_actions();
         if (actions.size() != NUM_JOINTS) {
             throw std::runtime_error("[ArtiH1::control] The ONNX model has no 'actions' output (needs pt_to_onnx.py export).");
         }
@@ -918,6 +1071,12 @@ void robot::ArtiH1::control() {
         std::copy(actions.begin(), actions.end(), previous_actions_.begin());
 
         if (log_file_ != nullptr) write_log_row();
+
+        if (olaf_obs_) {
+            olaf_advance();   // ArtiH1OlafEnv._pre_physics_step: phase, path frame, standing g follow
+            motor_manager_->write(motor_command_);
+            return;
+        }
 
         // the env advances the clock once per control step (ArtiH1AmpEnv._pre_physics_step)
         // the env advances the clock the same way (ArtiH1AmpEnv._advance_gait_phase)
@@ -934,4 +1093,123 @@ void robot::ArtiH1::control() {
         gait_phase_ = next;
     }
     motor_manager_->write(motor_command_);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// arti_h1_olaf (arXiv 2512.16705) support: state estimate, path frame, control input g. Mirrors ArtiH1OlafEnv.
+
+namespace {
+double wrap_angle(double a) { return std::atan2(std::sin(a), std::cos(a)); }
+double yaw_of(const Eigen::Matrix3d& R) { return std::atan2(R(1, 0), R(0, 0)); }
+}
+
+std::array<double, 3> robot::ArtiH1::olaf_project_walk(const std::array<double, 3>& g) const {
+    // ArtiH1OlafEnv._walk_blend: inverse-distance blend of the reference_knn nearest clip keys, distances scaled by the
+    // command span; the commanded path velocity becomes the blend of those keys
+    std::array<double, 3> scale{};
+    for (std::size_t i = 0; i < 3; ++i) scale[i] = 1.0 / (olaf_walk_range_[i][1] - olaf_walk_range_[i][0]);
+    std::vector<std::pair<double, std::size_t>> d;
+    d.reserve(olaf_walk_keys_.size());
+    for (std::size_t k = 0; k < olaf_walk_keys_.size(); ++k) {
+        double s = 0.0;
+        for (std::size_t i = 0; i < 3; ++i) s += std::pow((g[i] - olaf_walk_keys_[k][i]) * scale[i], 2);
+        d.emplace_back(std::sqrt(s), k);
+    }
+    const std::size_t n = std::min<std::size_t>(static_cast<std::size_t>(olaf_knn_), d.size());
+    std::partial_sort(d.begin(), d.begin() + n, d.end());
+    std::array<double, 3> out{};
+    double wsum = 0.0;
+    for (std::size_t j = 0; j < n; ++j) {
+        const double w = 1.0 / (d[j].first + 1e-3);
+        wsum += w;
+        for (std::size_t i = 0; i < 3; ++i) out[i] += w * olaf_walk_keys_[d[j].second][i];
+    }
+    for (auto& v : out) v /= wsum;
+    return out;
+}
+
+void robot::ArtiH1::olaf_estimate(const Eigen::Matrix3d& world_R_root) {
+    // Kinematic-inertial odometry in an estimator world frame (z = ground under the stance soles, yaw = attitude yaw):
+    // the soles in contact stay where they touched down (anchors), the pelvis is anchor - R * sole (pelvis frame, FK).
+    // The policy only sees the pelvis relative to the path frame, which is integrated in the same frame, so the
+    // drift of the absolute position does not matter.
+    std::array<Eigen::Vector3d, 2> rel{};
+    for (std::size_t i = 0; i < 2; ++i) {
+        const Eigen::Vector3d sole = kinematics_->frame_position(foot_frame_ids_[i]) +
+                                     kinematics_->frame_rotation(foot_frame_ids_[i]) * foot_toe_offsets_[i];
+        rel[i] = world_R_root * sole;
+        olaf_feet_yaw_[i] = yaw_of(world_R_root * kinematics_->frame_rotation(foot_frame_ids_[i]));
+    }
+    olaf_root_yaw_ = yaw_of(world_R_root);
+    if (!olaf_est_init_) {
+        olaf_pos_ = Eigen::Vector3d(0.0, 0.0, -0.5 * (rel[0].z() + rel[1].z()));
+        for (std::size_t i = 0; i < 2; ++i) {
+            olaf_anchor_[i] = olaf_pos_ + rel[i];
+            olaf_anchor_[i].z() = 0.0;
+        }
+        olaf_contact_ = {true, true};
+        olaf_vel_.setZero();
+        olaf_est_init_ = true;
+        olaf_reset_path();
+    }
+    // contact: the lowest sole, and the other one if it is within contact_tolerance of it
+    const double zmin = std::min(rel[0].z(), rel[1].z());
+    std::array<bool, 2> contact{};
+    for (std::size_t i = 0; i < 2; ++i) {
+        contact[i] = rel[i].z() - zmin < olaf_contact_tolerance_;
+        if (contact[i] && !olaf_contact_[i]) {   // touchdown: anchor the sole where it is now
+            olaf_anchor_[i] = olaf_pos_ + rel[i];
+            olaf_anchor_[i].z() = 0.0;
+        }
+    }
+    olaf_contact_ = contact;
+    Eigen::Vector3d p = Eigen::Vector3d::Zero();
+    int n = 0;
+    for (std::size_t i = 0; i < 2; ++i) {
+        if (!contact[i]) continue;
+        p += olaf_anchor_[i] - rel[i];
+        ++n;
+    }
+    p /= std::max(n, 1);
+    const Eigen::Vector3d raw = (p - olaf_pos_) / control_dt_;
+    const double a = control_dt_ / (control_dt_ + olaf_velocity_tau_);
+    olaf_vel_ += a * (raw - olaf_vel_);
+    olaf_pos_ = p;
+    for (std::size_t i = 0; i < 2; ++i) olaf_feet_world_[i] = olaf_pos_ + rel[i];
+}
+
+void robot::ArtiH1::olaf_reset_path() {
+    // the env starts the path frame at the spawned torso (position, heading)
+    olaf_path_ = {olaf_pos_.x(), olaf_pos_.y(), olaf_root_yaw_};
+    if (!olaf_walking_) olaf_g_ = olaf_g_target_;
+}
+
+void robot::ArtiH1::olaf_advance() {
+    const double dt = control_dt_;
+    if (olaf_walking_) {
+        olaf_phase_ = std::fmod(olaf_phase_ + dt / olaf_walk_period_, 1.0);
+        const double psi = olaf_path_[2];
+        olaf_path_[0] += (std::cos(psi) * olaf_g_[0] - std::sin(psi) * olaf_g_[1]) * dt;
+        olaf_path_[1] += (std::sin(psi) * olaf_g_[0] + std::cos(psi) * olaf_g_[1]) * dt;
+        olaf_path_[2] = psi + olaf_g_[2] * dt;
+    } else {
+        for (std::size_t i = 0; i < 4; ++i) {
+            const double step = olaf_stand_rate_[i] * dt;
+            olaf_g_[i] += std::clamp(olaf_g_target_[i] - olaf_g_[i], -step, step);
+        }
+        // converge toward the feet midpoint and the mean sole heading (right foot link faces -x: yaw + pi)
+        const double yl = olaf_feet_yaw_[0], yr = olaf_feet_yaw_[1] + PI;
+        const double psi_f = std::atan2(std::sin(yl) + std::sin(yr), std::cos(yl) + std::cos(yr));
+        const double a = 1.0 - std::exp(-dt / olaf_stand_path_tau_);
+        olaf_path_[0] += a * (0.5 * (olaf_feet_world_[0].x() + olaf_feet_world_[1].x()) - olaf_path_[0]);
+        olaf_path_[1] += a * (0.5 * (olaf_feet_world_[0].y() + olaf_feet_world_[1].y()) - olaf_path_[1]);
+        olaf_path_[2] += a * wrap_angle(psi_f - olaf_path_[2]);
+    }
+    // keep the path frame within a bounded distance of the torso
+    const double ex = olaf_path_[0] - olaf_pos_.x(), ey = olaf_path_[1] - olaf_pos_.y();
+    const double dist = std::max(std::hypot(ex, ey), 1e-6);
+    const double k = std::min(1.0, olaf_path_max_distance_ / dist);
+    olaf_path_[0] = olaf_pos_.x() + ex * k;
+    olaf_path_[1] = olaf_pos_.y() + ey * k;
+    olaf_path_[2] = olaf_root_yaw_ + std::clamp(wrap_angle(olaf_path_[2] - olaf_root_yaw_), -olaf_path_max_yaw_, olaf_path_max_yaw_);
 }

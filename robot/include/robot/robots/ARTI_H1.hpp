@@ -4,9 +4,13 @@
 #include <array>
 #include <chrono>
 #include <cstdio>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+#include <Eigen/Core>
+#include <Eigen/Geometry>
 
 #include "robot/core/robot.hpp"
 #include "robot/controllers/amp_controller.hpp"
@@ -219,6 +223,53 @@ private:
 
     // Damping only (kp 0) on every joint, then throw: used when the robot falls.
     [[noreturn]] void safe_stop(const std::string& reason);
+
+    // ---------------------------------------------------------------------------------------------------------------
+    // robot.yaml policy.observation: "olaf" = arti_h1_olaf (arXiv 2512.16705) walking + standing policies, one ONNX
+    // each (model_file = walking, olaf.stand_model_file = standing), switched with the pad (cross = walk, circle =
+    // stand; the robot starts standing). Observation = ArtiH1OlafEnv._get_observations (policy order):
+    //   pelvis position relative to the path frame (x, y, height) 3, pelvis orientation relative to the path frame
+    //   (first two rotation-matrix columns, row-major) 6, pelvis linear velocity (pelvis frame) 3, gyro (pelvis frame) 3,
+    //   joint pos - default 12, joint vel 12, a(t) 12, a(t-1) 12, motor temperatures (clip [70, 85] C, scaled to
+    //   [-1, 1]) 12, then walking: gait phase (cos, sin) 2 + path velocity g (vx, vy, wz) 3 (80-D);
+    //   standing: g = (dz, roll, pitch, yaw) of the trunk 4 (79-D).
+    // The pelvis pose / velocity come from olaf_estimate() (IMU attitude + leg kinematics on the stance feet; the paper
+    // uses an IMU + actuator state estimator), the path frame / phase / g follow the env (olaf_advance()).
+    bool olaf_obs_{false};
+    bool olaf_walking_{false};
+    std::unique_ptr<controller::AmpController> olaf_stand_controller_;
+    double olaf_walk_period_{0.8};
+    double olaf_walk_start_phase_{0.92};
+    double olaf_path_max_distance_{0.10};
+    double olaf_path_max_yaw_{0.35};
+    double olaf_stand_path_tau_{0.5};
+    std::array<double, 2> olaf_thermal_clip_{70.0, 85.0};
+    std::array<std::array<double, 2>, 3> olaf_walk_range_{};     // vx, vy, wz (min, max): full stick
+    std::array<std::array<double, 2>, 4> olaf_stand_range_{};    // dz, roll, pitch, yaw (min, max): full stick
+    std::array<double, 4> olaf_stand_rate_{};                    // max g change per second (standing)
+    std::vector<std::array<double, 3>> olaf_walk_keys_;          // reference clip keys (path velocity)
+    int olaf_knn_{4};
+    double olaf_contact_tolerance_{0.012};                       // m: a sole this close to the lowest sole is in contact
+    double olaf_velocity_tau_{0.03};                             // s: low-pass of the estimated pelvis velocity
+    // estimator / path frame state (estimated world frame: z = ground, yaw = attitude filter yaw)
+    bool olaf_est_init_{false};
+    Eigen::Vector3d olaf_pos_{Eigen::Vector3d::Zero()};
+    Eigen::Vector3d olaf_vel_{Eigen::Vector3d::Zero()};
+    std::array<Eigen::Vector3d, 2> olaf_anchor_{};
+    std::array<bool, 2> olaf_contact_{{true, true}};
+    std::array<Eigen::Vector3d, 2> olaf_feet_world_{};
+    std::array<double, 2> olaf_feet_yaw_{};
+    double olaf_root_yaw_{0.0};
+    std::array<double, 3> olaf_path_{};                          // x, y, psi
+    double olaf_phase_{0.0};
+    std::array<double, 4> olaf_g_{};
+    std::array<double, 4> olaf_g_target_{};
+    bool olaf_prev_cross_{false};
+    bool olaf_prev_circle_{false};
+    std::array<double, 3> olaf_project_walk(const std::array<double, 3>& g) const;
+    void olaf_estimate(const Eigen::Matrix3d& world_R_root);
+    void olaf_reset_path();
+    void olaf_advance();
 };
 
 } // namespace robot
