@@ -1081,7 +1081,10 @@ void robot::ArtiH1::control() {
         if (olaf_obs_ && !olaf_walking_) active = olaf_stand_controller_.get();
         active->update(observation_, action_);
         if (olaf_obs_) {
-            // q_des goes to the servo thread (first-order hold, slew limit, low-pass at the actuator rate)
+            // q_des goes to the servo thread (first-order hold, slew limit, low-pass at the actuator rate). On the first
+            // step the servo starts from q_target_ = the default pose the robot stands in (the env resets q_des, its
+            // history and the filter to the reset pose and ramps from there), so the first q_des is ramped, not jumped.
+            if (!olaf_servo_run_) olaf_servo_start();
             std::copy(action_.begin(), action_.end(), q_target_.begin());
             olaf_servo_set(q_target_);
             const auto& actions = active->policy_actions();
@@ -1248,7 +1251,6 @@ void robot::ArtiH1::olaf_advance() {
 // olaf runtime chain (paper Sec. VII-C): ArtiH1OlafEnv._apply_action at the actuator rate
 
 void robot::ArtiH1::olaf_servo_set(const std::array<double, 12>& q_des) {
-    if (!olaf_servo_run_) olaf_servo_start();
     std::lock_guard<std::mutex> lock(olaf_servo_mutex_);
     olaf_q_des_prev_ = olaf_q_des_;
     olaf_q_des_ = q_des;
