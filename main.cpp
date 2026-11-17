@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <cmath>
 #include <thread>
 #include <chrono>
 #include <csignal>
@@ -95,8 +97,9 @@ int main(int argc, char* argv[])
 
         if (observe) {
             // observation check only: the motors keep holding the default pose from initialize(); the observation is
-            // logged at the control rate (60 Hz) and printed at 5 Hz
-            constexpr auto kObservePeriod = std::chrono::microseconds(1'000'000 / 60);
+            // logged at the control rate (policy.control_dt) and printed at ~5 Hz
+            const auto kObservePeriod = std::chrono::microseconds(std::llround(robot.control_dt() * 1e6));
+            const int print_every = std::max(1, static_cast<int>(std::lround(0.2 / robot.control_dt())));
             if (limp_right) robot.set_limp_right();
             auto next_wakeup = std::chrono::steady_clock::now();
             int tick = 0;
@@ -106,8 +109,8 @@ int main(int argc, char* argv[])
                 robot.log_observation();
                 robot.update_limp_stats();
                 if (limp_right) {
-                    if (tick++ % 30 == 0) robot.print_limp_report();   // 2 Hz
-                } else if (tick++ % 12 == 0) {
+                    if (tick++ % (2 * print_every + print_every / 2) == 0) robot.print_limp_report();   // 2 Hz
+                } else if (tick++ % print_every == 0) {
                     robot.print_observation();
                 }
                 next_wakeup += kObservePeriod;
@@ -119,7 +122,8 @@ int main(int argc, char* argv[])
 
         std::this_thread::sleep_for(std::chrono::milliseconds(10000));
 
-        constexpr auto kControlPeriod = std::chrono::microseconds(1'000'000 / 60);
+        // policy.control_dt: 1/60 s (velocity / amp policies), 0.02 s (olaf: 50 Hz, paper Sec. VII-C)
+        const auto kControlPeriod = std::chrono::microseconds(std::llround(robot.control_dt() * 1e6));
         auto next_wakeup = std::chrono::steady_clock::now();
 
         while (running) {

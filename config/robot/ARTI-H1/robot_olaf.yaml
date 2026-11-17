@@ -59,13 +59,15 @@ foots:
 
 # Policy settings; must match ArtiH1OlafEnvCfg (arti_h1_olaf olaf_env_cfg.py).
 # ONNX input obs [1, 80] (walk) / [1, 79] (stand), see ARTI_H1.hpp 'olaf'; outputs "actions" (fed back as a(t)) and
-# "q_des" (= clamp(default + per-joint scale * actions, real limits, hip_roll +-15 deg)). The controller then applies
-# the target low-pass and the rate limit below (same as training) and sends that.
+# "q_des" (= clamp(default + per-joint scale * actions, real limits, hip_roll +-15 deg)). Runtime as the paper (Sec.
+# VII-C) and the training env: policy at 50 Hz, q_des upsampled by a first-order hold to olaf.actuator_rate (600 Hz),
+# slew limited (olaf.action_rate_limit) and low-pass filtered at olaf.action_lowpass_hz (37.5 Hz) in a servo thread.
+# The per-control-step low-pass / rate limit of the velocity line are off for olaf.
 policy:
   observation: olaf
-  target_rate_limit: 5.24
-  target_lowpass_alpha: 0.6
-  control_dt: 0.0166666667
+  target_rate_limit: 0.0
+  target_lowpass_alpha: 1.0
+  control_dt: 0.02
   gait_phase_rate: 0.0          # unused (olaf keeps its own clock: olaf.walk_period)
   initial_gait_phase: 0.0
   gait_rest_phases: []
@@ -97,6 +99,21 @@ olaf:
   walk_command_range: [[-0.12, 0.15], [-0.068, 0.068], [-0.40, 0.40]]       # vx m/s, vy m/s, wz rad/s
   stand_command_range: [[-0.03, 0.015], [-0.10, 0.10], [-0.15, 0.15], [-0.30, 0.30]]   # dz m, roll, pitch, yaw rad
   stand_command_rate: [0.05, 0.3, 0.3, 0.5]                                  # per second
-  # state estimate (training est_contact_tolerance / est_velocity_tau)
-  contact_tolerance: 0.012
-  velocity_tau: 0.03
+  # runtime chain (training action_first_order_hold / action_lowpass_hz / action_rate_limit, sim.dt 1/600)
+  actuator_rate: 600.0          # Hz, servo thread
+  action_lowpass_hz: 37.5
+  action_rate_limit: 5.24       # rad/s
+  # state estimate: contact-aided invariant EKF (robot::OlafInEKF = training olaf/inekf.py, ArtiH1OlafEnvCfg.ekf_*)
+  contact_tolerance: 0.012      # m, est_contact_tolerance
+  ekf:
+    gyro_noise: 0.02            # rad/s/sqrt(Hz)
+    accel_noise: 0.5            # m/s^2/sqrt(Hz)
+    gyro_bias_noise: 0.002
+    accel_bias_noise: 0.02
+    contact_noise: 0.05         # m/s/sqrt(Hz), sole slip
+    fk_noise: 0.01              # m
+    init_rot: 0.03
+    init_vel: 0.05
+    init_pos: 0.01
+    init_gyro_bias: 0.03
+    init_accel_bias: 0.2

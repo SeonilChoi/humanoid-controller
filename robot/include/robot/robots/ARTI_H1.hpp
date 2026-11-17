@@ -2,10 +2,13 @@
 #define ROBOT_ROBOTS_ARTI_H1_HPP_
 
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -14,6 +17,7 @@
 
 #include "robot/core/robot.hpp"
 #include "robot/controllers/amp_controller.hpp"
+#include "robot/robots/olaf_inekf.hpp"
 #include "sensor/core/sensor_interface.hpp"
 
 namespace robot {
@@ -45,6 +49,8 @@ public:
     // on = gyro bias average over imu_still_time (10 s if the yaml has 0) + wait for the attitude to converge; off = skip.
     void set_imu_calibration(bool on) { imu_still_time_ = on ? (imu_still_time_ > 0.0 ? imu_still_time_ : 10.0) : 0.0; }
     double imu_still_time() const { return imu_still_time_; }
+    // control period of the policy loop (robot.yaml policy.control_dt): main.cpp runs observation() / control() at it
+    double control_dt() const { return control_dt_; }
 
     // Zero check (main.cpp --observe --limp-right): after initialize() the right-leg motors get kp 0 (policy kd only,
     // so the leg is limp but damped) while the left leg keeps holding the default pose. Hold the pelvis level with
@@ -233,8 +239,11 @@ private:
     //   joint pos - default 12, joint vel 12, a(t) 12, a(t-1) 12, motor temperatures (clip [70, 85] C, scaled to
     //   [-1, 1]) 12, then walking: gait phase (cos, sin) 2 + path velocity g (vx, vy, wz) 3 (80-D);
     //   standing: g = (dz, roll, pitch, yaw) of the trunk 4 (79-D).
-    // The pelvis pose / velocity come from olaf_estimate() (IMU attitude + leg kinematics on the stance feet; the paper
-    // uses an IMU + actuator state estimator), the path frame / phase / g follow the env (olaf_advance()).
+    // The pelvis pose / velocity / orientation come from olaf_estimate(): the contact-aided invariant EKF (OlafInEKF, the
+    // paper's [42]) on the MTi-3 gyro / accelerometer and the leg kinematics; the path frame / phase / g follow the env
+    // (olaf_advance()). Runtime (paper Sec. VII-C): the policy runs at 50 Hz (policy.control_dt 0.02); its q_des is
+    // upsampled with a first-order hold to olaf.actuator_rate (600 Hz), slew limited and low-pass filtered at
+    // olaf.action_lowpass_hz (37.5 Hz) in the servo thread (olaf_servo_loop), which writes the motor commands.
     bool olaf_obs_{false};
     bool olaf_walking_{false};
     std::unique_ptr<controller::AmpController> olaf_stand_controller_;
@@ -250,12 +259,15 @@ private:
     std::vector<std::array<double, 3>> olaf_walk_keys_;          // reference clip keys (path velocity)
     int olaf_knn_{4};
     double olaf_contact_tolerance_{0.012};                       // m: a sole this close to the lowest sole is in contact
-    double olaf_velocity_tau_{0.03};                             // s: low-pass of the estimated pelvis velocity
-    // estimator / path frame state (estimated world frame: z = ground, yaw = attitude filter yaw)
+    // estimator (ArtiH1OlafEnv._estimate): the filter restarts from the MTi-3 attitude on the first olaf_restart_steps
+    // estimates (the env: episode_length_buf <= 2), then propagates / corrects every control step
+    OlafInEKF olaf_ekf_;
+    int olaf_est_steps_{0};
+    static constexpr int olaf_restart_steps_ = 3;
     bool olaf_est_init_{false};
+    Eigen::Matrix3d olaf_R_{Eigen::Matrix3d::Identity()};       // estimated world_R_pelvis
     Eigen::Vector3d olaf_pos_{Eigen::Vector3d::Zero()};
     Eigen::Vector3d olaf_vel_{Eigen::Vector3d::Zero()};
-    std::array<Eigen::Vector3d, 2> olaf_anchor_{};
     std::array<bool, 2> olaf_contact_{{true, true}};
     std::array<Eigen::Vector3d, 2> olaf_feet_world_{};
     std::array<double, 2> olaf_feet_yaw_{};
@@ -267,9 +279,29 @@ private:
     bool olaf_prev_cross_{false};
     bool olaf_prev_circle_{false};
     std::array<double, 3> olaf_project_walk(const std::array<double, 3>& g) const;
-    void olaf_estimate(const Eigen::Matrix3d& world_R_root);
+    void olaf_estimate(const Eigen::Matrix3d& world_R_root, const Eigen::Vector3d& gyro_root,
+                       const Eigen::Vector3d& accel_root, const Eigen::Vector3d& imu_root);
     void olaf_reset_path();
     void olaf_advance();
+
+    // servo thread (runtime chain): first-order hold from olaf_q_des_prev_ to olaf_q_des_ over the control period,
+    // slew limit olaf_rate_limit_ (rad/s), low-pass alpha = 1 - exp(-2 pi f_c / actuator_rate); policy order.
+    // Mirrors ArtiH1OlafEnv._apply_action (physics step = one servo tick).
+    double olaf_actuator_rate_{600.0};
+    double olaf_lowpass_hz_{37.5};
+    double olaf_rate_limit_{5.24};
+    std::mutex olaf_servo_mutex_;
+    std::thread olaf_servo_thread_;
+    std::atomic<bool> olaf_servo_run_{false};       // thread alive
+    std::atomic<bool> olaf_servo_active_{false};    // thread writes the motor commands (false while holding / stopped)
+    std::array<double, 12> olaf_q_des_prev_{};
+    std::array<double, 12> olaf_q_des_{};
+    std::array<double, 12> olaf_q_filt_{};
+    int olaf_servo_tick_{0};                        // servo ticks since the last q_des
+    void olaf_servo_start();
+    void olaf_servo_stop();
+    void olaf_servo_loop();
+    void olaf_servo_set(const std::array<double, 12>& q_des);
 };
 
 } // namespace robot

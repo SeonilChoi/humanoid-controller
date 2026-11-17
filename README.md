@@ -190,13 +190,21 @@ policies:
 `policy.observation: olaf` loads two ONNX models: `model_file` (walking, 80-D obs) and `olaf.stand_model_file`
 (standing, 79-D). Both observe the pelvis pose and velocity relative to a *path frame*, so the controller runs:
 
-* a state estimate (`ArtiH1::olaf_estimate`): the IMU attitude plus the leg kinematics. Each sole in contact is held
-  where it touched down; contact means within 12 mm of the lowest sole. The pelvis position is the anchor minus R·FK,
-  and the velocity is a low-passed difference of it.
+* a state estimate (`ArtiH1::olaf_estimate`): the paper's contact-aided invariant EKF (Hartley et al. [42],
+  `robot/robots/olaf_inekf.hpp`). It propagates on the MTi-3 gyro and accelerometer and corrects with the leg
+  kinematics of each sole in contact (contact = within 12 mm of the lowest sole). It starts from the MTi-3 attitude on
+  the first 3 control steps. Its pelvis orientation, position and velocity go into the observation.
 * the path frame and the clock (`olaf_advance`). WALK integrates the stick path velocity. STAND converges to the
   feet midpoint with τ 0.5 s. Either way the frame is kept within 0.10 m / 0.35 rad of the pelvis.
 
-The training env builds the actor observation with the same estimator, so the policy is trained on it. Motor
+* the runtime chain of the paper (Sec. VII-C). The policy runs at 50 Hz (`policy.control_dt: 0.02`). A 600 Hz servo
+  thread ramps linearly from the previous q_des to the new one over the control period (first-order hold), applies
+  the 5.24 rad/s slew limit and a 37.5 Hz first-order low-pass, and writes the motor commands. The Unitree bus
+  (8 ms master period) samples that signal at 125 Hz.
+
+The training env builds the actor observation with the same filter (`olaf/inekf.py`; the C++ and torch versions
+agree to 1e-14 on the same input), and simulates the same runtime chain with 600 Hz physics, so the policy is
+trained on both. Motor
 temperatures are observed, clipped to [70, 85] °C (below 70 °C they all read −1).
 
 Stick mapping:
