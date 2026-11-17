@@ -54,8 +54,8 @@ urdf_file: ../config/robot/ARTI-H1/robot.urdf
 # delays and target low-pass 0.6.
 # Sim eval with joint zero errors: vx 0.65 / vy 0.26 / yaw small 0.80 / large 0.82, 1 fall without pushes (arc),
 #   4.7 % kick falls (r16: 7.0 %), fwd-kick falls 9.4 % (r16-r20: ~14 %), tilt rms 3.7 deg.
-model_file: ../config/robot/ARTI-H1/agent_vel_kb11_480000.onnx
-# model_file: ../config/robot/ARTI-H1/agent_vel_kb10_240000.onnx   # kb10: target_lowpass_alpha 0.6 (same)
+# model_file: ../config/robot/ARTI-H1/agent_vel_kb11_480000.onnx
+model_file: ../config/robot/ARTI-H1/agent_vel_kb10_240000.onnx   # kb10: target_lowpass_alpha 0.6 (same)
 # model_file: ../config/robot/ARTI-H1/agent_vel_r21_240000.onnx   # r21: target_lowpass_alpha 0.6 (same)
 # model_file: ../config/robot/ARTI-H1/agent_vel_kb08_240000.onnx   # kb08 (withdrawn): needs target_lowpass_alpha 0.35
 # Per-control-step CSV (observation, ONNX q_des / actions, motor states, raw IMU) written to
