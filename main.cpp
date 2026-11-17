@@ -140,10 +140,12 @@ int main(int argc, char* argv[])
         }
     } catch (const std::exception& e) {
         std::cerr << e.what() << std::endl;
+        robot.shutdown_servo();
         robot.stop();
         return 1;
     }
 
+    robot.shutdown_servo();
     robot.stop();
     return 0;
 }

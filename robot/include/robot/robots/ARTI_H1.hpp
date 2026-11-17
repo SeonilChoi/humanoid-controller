@@ -51,6 +51,8 @@ public:
     double imu_still_time() const { return imu_still_time_; }
     // control period of the policy loop (robot.yaml policy.control_dt): main.cpp runs observation() / control() at it
     double control_dt() const { return control_dt_; }
+    // stop the olaf servo thread (it writes the motor commands); main.cpp calls it before Robot::stop()
+    void shutdown_servo();
 
     // Zero check (main.cpp --observe --limp-right): after initialize() the right-leg motors get kp 0 (policy kd only,
     // so the leg is limp but damped) while the left leg keeps holding the default pose. Hold the pelvis level with
@@ -278,6 +280,7 @@ private:
     std::array<double, 4> olaf_g_target_{};
     bool olaf_prev_cross_{false};
     bool olaf_prev_circle_{false};
+    bool olaf_stand_switch_{false};
     std::array<double, 3> olaf_project_walk(const std::array<double, 3>& g) const;
     void olaf_estimate(const Eigen::Matrix3d& world_R_root, const Eigen::Vector3d& gyro_root,
                        const Eigen::Vector3d& accel_root, const Eigen::Vector3d& imu_root);

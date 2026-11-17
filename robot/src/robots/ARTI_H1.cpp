@@ -846,6 +846,7 @@ void robot::ArtiH1::observation() {
             std::cout << "[ArtiH1] olaf: WALK policy" << std::endl;
         } else if (joy_data.circle && !olaf_prev_circle_ && olaf_walking_) {
             olaf_walking_ = false;
+            olaf_stand_switch_ = true;              // g = the current stick target below (env: g = g_target at reset)
             olaf_reset_path();                      // training: standing episodes from mid-stride start at the torso
             std::cout << "[ArtiH1] olaf: STAND policy" << std::endl;
         }
@@ -868,6 +869,8 @@ void robot::ArtiH1::observation() {
                               span(dead(joy_data.stick_lx), olaf_stand_range_[1]),
                               span(dead(joy_data.stick_ly), olaf_stand_range_[2]),
                               span(-dead(joy_data.stick_rx), olaf_stand_range_[3])};
+            if (olaf_stand_switch_) olaf_g_ = olaf_g_target_;
+            olaf_stand_switch_ = false;
             command_ = {0.0, 0.0, 0.0};
         }
         // pelvis pose / velocity relative to the path frame
@@ -1060,9 +1063,11 @@ void robot::ArtiH1::control() {
     if ((status & hold_mask) != 0 && !holding_) {
         holding_ = true;
         hold_from_ = q_target_;
-        if (olaf_obs_) {
-            olaf_servo_active_ = false;   // the hold writes the motor commands from here on
+        if (olaf_obs_ && olaf_servo_run_) {
+            // the hold writes the motor commands from here on; under the servo lock, so a servo write cannot land after
+            // it. Before the servo has started q_target_ is still the standing pose (olaf_q_filt_ is not set yet).
             std::lock_guard<std::mutex> lock(olaf_servo_mutex_);
+            olaf_servo_active_ = false;
             hold_from_ = olaf_q_filt_;
         }
         hold_start_ = std::chrono::steady_clock::now();
@@ -1084,13 +1089,13 @@ void robot::ArtiH1::control() {
             // q_des goes to the servo thread (first-order hold, slew limit, low-pass at the actuator rate). On the first
             // step the servo starts from q_target_ = the default pose the robot stands in (the env resets q_des, its
             // history and the filter to the reset pose and ramps from there), so the first q_des is ramped, not jumped.
-            if (!olaf_servo_run_) olaf_servo_start();
-            std::copy(action_.begin(), action_.end(), q_target_.begin());
-            olaf_servo_set(q_target_);
             const auto& actions = active->policy_actions();
             if (actions.size() != NUM_JOINTS) {
                 throw std::runtime_error("[ArtiH1::control] The ONNX model has no 'actions' output (needs export_onnx.py).");
             }
+            if (!olaf_servo_run_) olaf_servo_start();
+            std::copy(action_.begin(), action_.end(), q_target_.begin());
+            olaf_servo_set(q_target_);
             previous_actions3_ = previous_actions2_;
             previous_actions2_ = previous_actions_;
             std::copy(actions.begin(), actions.end(), previous_actions_.begin());
@@ -1252,7 +1257,13 @@ void robot::ArtiH1::olaf_advance() {
 
 void robot::ArtiH1::olaf_servo_set(const std::array<double, 12>& q_des) {
     std::lock_guard<std::mutex> lock(olaf_servo_mutex_);
-    olaf_q_des_prev_ = olaf_q_des_;
+    // the new ramp starts where the current one is (= the previous q_des after the 12 ticks of a control period, as in
+    // the env); if the 50 Hz loop and the servo drift apart (11 or 13 ticks) the hold input stays continuous
+    const int n = std::max(1, static_cast<int>(std::lround(control_dt_ * olaf_actuator_rate_)));
+    const double k = static_cast<double>(std::min(olaf_servo_tick_, n)) / n;
+    for (std::size_t i = 0; i < NUM_JOINTS; ++i) {
+        olaf_q_des_prev_[i] = olaf_q_des_prev_[i] + k * (olaf_q_des_[i] - olaf_q_des_prev_[i]);
+    }
     olaf_q_des_ = q_des;
     olaf_servo_tick_ = 0;
 }
@@ -1270,6 +1281,8 @@ void robot::ArtiH1::olaf_servo_start() {
     olaf_servo_run_ = true;
     olaf_servo_thread_ = std::thread(&ArtiH1::olaf_servo_loop, this);
 }
+
+void robot::ArtiH1::shutdown_servo() { olaf_servo_stop(); }
 
 void robot::ArtiH1::olaf_servo_stop() {
     olaf_servo_active_ = false;
@@ -1308,6 +1321,7 @@ void robot::ArtiH1::olaf_servo_loop() {
             cmd[motor_index].kp = policy_kp_[motor_index];
             cmd[motor_index].kd = policy_kd_[motor_index];
         }
+        std::lock_guard<std::mutex> lock(olaf_servo_mutex_);   // the hold hand-off clears the flag under this lock
         if (olaf_servo_active_) motor_manager_->write(cmd);
     }
 }
