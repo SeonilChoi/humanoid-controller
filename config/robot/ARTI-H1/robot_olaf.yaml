@@ -14,7 +14,7 @@ urdf_file: ../config/robot/ARTI-H1/robot.urdf
 #          right stick left / right = trunk yaw, up / down = trunk height
 # Export: arti_h1_olaf scripts/export_onnx.py --checkpoint <run>/checkpoints/agent_N.pt --out agent_olaf_walk_N.onnx
 # (and the stand run -> agent_olaf_stand_N.onnx); olaf_walk_keys.yaml comes from the same script (--keys_out).
-model_file: ../config/robot/ARTI-H1/agent_olaf_walk.onnx
+model_file: ../config/robot/ARTI-H1/agent_olaf_walk_1944000.onnx   # walk_09 agent_1944000 (2.4M steps)
 log_file: ./arti_h1_olaf_run
 
 motors:
@@ -86,7 +86,7 @@ policy:
   default_pose: [0.0, 0.0, 0.0, 0.0, 0.33555, 0.33555, -0.67109, -0.67109, -0.33555, -0.33554, 0.0, 0.0]
 
 olaf:
-  stand_model_file: ../config/robot/ARTI-H1/agent_olaf_stand.onnx
+  stand_model_file: ../config/robot/ARTI-H1/agent_olaf_stand_1056000.onnx   # server stand agent_1056000
   walk_keys_file: ../config/robot/ARTI-H1/olaf_walk_keys.yaml
   reference_knn: 4
   walk_period: 0.8              # s, reference gait period
