@@ -252,6 +252,12 @@ private:
                                         // runs only while the stick asks for a velocity; zero -> STAND policy (neutral g)
     double olaf_walk_stop_hold_{0.3};   // s of zero stick before a walk-mode WALK -> STAND switch
     double olaf_zero_cmd_time_{0.0};
+    // WALK -> STAND only in double support at the end of a step (phase mod 0.5 in [stop_phase_window[0], [1]); both
+    // soles in contact), at the latest stop_timeout s after the stop request. 11-20 robot: a switch in single support
+    // (phase 0.25) fell forward.
+    std::array<double, 2> olaf_stop_phase_window_{0.40, 0.50};
+    double olaf_walk_stop_timeout_{1.0};
+    double olaf_stop_wait_{0.0};
     std::unique_ptr<controller::AmpController> olaf_stand_controller_;
     double olaf_walk_period_{0.8};
     double olaf_walk_start_phase_{0.92};
