@@ -86,7 +86,7 @@ policy:
   default_pose: [0.0, 0.0, 0.0, 0.0, 0.33555, 0.33555, -0.67109, -0.67109, -0.33555, -0.33554, 0.0, 0.0]
 
 olaf:
-  stand_model_file: ../config/robot/ARTI-H1/agent_olaf_stand_1056000.onnx   # server stand agent_1056000
+  stand_model_file: ../config/robot/ARTI-H1/agent_olaf_stand_smooth_72000.onnx   # stand_07 agent_72000: smoothness fine-tune (rate 10, acc 3) of server agent_1056000; previous: agent_olaf_stand_1056000.onnx
   walk_keys_file: ../config/robot/ARTI-H1/olaf_walk_keys.yaml
   reference_knn: 4
   walk_period: 0.8              # s, reference gait period
