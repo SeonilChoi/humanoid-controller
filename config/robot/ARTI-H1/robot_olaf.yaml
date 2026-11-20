@@ -90,6 +90,7 @@ olaf:
   walk_keys_file: ../config/robot/ARTI-H1/olaf_walk_keys.yaml
   reference_knn: 4
   walk_period: 0.8              # s, reference gait period
+  walk_stop_hold: 0.3           # s: walk mode with the sticks at zero this long -> STAND policy (no stepping in place)
   walk_start_phase: 0.92        # clock when the WALK policy starts from standing (training reset_stand_pose)
   path_max_distance: 0.10       # m
   path_max_yaw: 0.35            # rad

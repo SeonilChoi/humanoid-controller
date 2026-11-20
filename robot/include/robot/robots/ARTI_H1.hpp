@@ -247,7 +247,11 @@ private:
     // upsampled with a first-order hold to olaf.actuator_rate (600 Hz), slew limited and low-pass filtered at
     // olaf.action_lowpass_hz (37.5 Hz) in the servo thread (olaf_servo_loop), which writes the motor commands.
     bool olaf_obs_{false};
-    bool olaf_walking_{false};
+    bool olaf_walking_{false};          // WALK policy active (else STAND policy)
+    bool olaf_walk_mode_{false};        // pad mode: cross = walk mode, circle = stand mode. In walk mode the WALK policy
+                                        // runs only while the stick asks for a velocity; zero -> STAND policy (neutral g)
+    double olaf_walk_stop_hold_{0.3};   // s of zero stick before a walk-mode WALK -> STAND switch
+    double olaf_zero_cmd_time_{0.0};
     std::unique_ptr<controller::AmpController> olaf_stand_controller_;
     double olaf_walk_period_{0.8};
     double olaf_walk_start_phase_{0.92};
