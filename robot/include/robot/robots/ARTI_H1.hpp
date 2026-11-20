@@ -258,6 +258,12 @@ private:
     std::array<double, 2> olaf_stop_phase_window_{0.40, 0.50};
     double olaf_walk_stop_timeout_{1.0};
     double olaf_stop_wait_{0.0};
+    // policy switch = env reset (ArtiH1OlafEnv._reset_idx): a(t), a(t-1) = the measured pose as an action,
+    // clamp((q - default) / scale, -1, 1), and the servo (q_des ramp, low-pass) restarts at q. Without it the STAND
+    // policy saw the WALK's +-1 knee actions in its history and saturated (11-20 robot runs, both knees -1 -> fall).
+    std::array<double, 12> olaf_action_scale_{0.3, 0.3, 0.3, 0.3, 0.7, 0.7, 0.8, 0.8, 0.6, 0.6, 0.35, 0.35};
+    template <typename MotorStatus>
+    void olaf_switch_reset(const MotorStatus& motor_status);
     std::unique_ptr<controller::AmpController> olaf_stand_controller_;
     double olaf_walk_period_{0.8};
     double olaf_walk_start_phase_{0.92};

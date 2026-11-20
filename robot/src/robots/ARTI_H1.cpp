@@ -193,6 +193,7 @@ robot::ArtiH1::ArtiH1(const std::string& config_file, const std::string& model_f
         olaf_stand_lowpass_hz_ = olaf["stand_action_lowpass_hz"] ? olaf["stand_action_lowpass_hz"].as<double>()
                                                                  : olaf_lowpass_hz_;
         if (olaf["walk_stop_hold"]) olaf_walk_stop_hold_ = olaf["walk_stop_hold"].as<double>();
+        if (olaf["action_scale"]) olaf_action_scale_ = read_array<NUM_JOINTS>(olaf, "action_scale");
         if (olaf["walk_stop_timeout"]) olaf_walk_stop_timeout_ = olaf["walk_stop_timeout"].as<double>();
         if (olaf["walk_stop_phase_window"]) olaf_stop_phase_window_ = read_array<2>(olaf, "walk_stop_phase_window");
         if (olaf["action_rate_limit"]) olaf_rate_limit_ = olaf["action_rate_limit"].as<double>();
@@ -884,11 +885,13 @@ void robot::ArtiH1::observation() {
             olaf_walking_ = true;
             olaf_phase_ = olaf_walk_start_phase_;   // training: walking episodes from the stance start at this phase
             olaf_reset_path();
+            olaf_switch_reset(motor_status);
             std::cout << "[ArtiH1] olaf: WALK policy" << std::endl;
         } else if (!want_walk && olaf_walking_) {
             olaf_walking_ = false;
             olaf_stand_switch_ = true;              // g = the current stick target below (env: g = g_target at reset)
             olaf_reset_path();                      // training: standing episodes from mid-stride start at the torso
+            olaf_switch_reset(motor_status);
             std::cout << "[ArtiH1] olaf: STAND policy" << std::endl;
         }
         if (olaf_walking_) {
@@ -1251,6 +1254,24 @@ void robot::ArtiH1::olaf_estimate(const Eigen::Matrix3d& world_R_root, const Eig
     }
     olaf_root_yaw_ = yaw_of(olaf_R_);
     if (restart) olaf_reset_path();
+}
+
+template <typename MotorStatus>
+void robot::ArtiH1::olaf_switch_reset(const MotorStatus& motor_status) {
+    std::array<double, NUM_JOINTS> q{};
+    for (std::size_t i = 0; i < NUM_JOINTS; ++i) {
+        q[i] = motor_status[joint_id_to_motor_index_.at(kinematics_->joint_id(kPolicyJointNames[i]))].position;
+        const double a = std::clamp((q[i] - default_pose_[i]) / olaf_action_scale_[i], -1.0, 1.0);
+        previous_actions_[i] = previous_actions2_[i] = previous_actions3_[i] = a;
+    }
+    q_target_ = q;
+    if (olaf_servo_run_) {
+        std::lock_guard<std::mutex> lock(olaf_servo_mutex_);
+        olaf_q_des_prev_ = q;
+        olaf_q_des_ = q;
+        olaf_q_filt_ = q;
+        olaf_servo_tick_ = std::max(1, static_cast<int>(std::lround(control_dt_ * olaf_actuator_rate_)));
+    }
 }
 
 void robot::ArtiH1::olaf_reset_path() {
