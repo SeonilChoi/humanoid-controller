@@ -190,6 +190,8 @@ robot::ArtiH1::ArtiH1(const std::string& config_file, const std::string& model_f
         // runtime chain (training action_first_order_hold / action_lowpass_hz / action_rate_limit, sim 600 Hz)
         if (olaf["actuator_rate"]) olaf_actuator_rate_ = olaf["actuator_rate"].as<double>();
         if (olaf["action_lowpass_hz"]) olaf_lowpass_hz_ = olaf["action_lowpass_hz"].as<double>();
+        olaf_stand_lowpass_hz_ = olaf["stand_action_lowpass_hz"] ? olaf["stand_action_lowpass_hz"].as<double>()
+                                                                 : olaf_lowpass_hz_;
         if (olaf["action_rate_limit"]) olaf_rate_limit_ = olaf["action_rate_limit"].as<double>();
         const auto keys = YAML::LoadFile(olaf["walk_keys_file"].as<std::string>())["walk_keys"]
                               .as<std::vector<std::vector<double>>>();
@@ -199,7 +201,8 @@ robot::ArtiH1::ArtiH1(const std::string& config_file, const std::string& model_f
                   << olaf["stand_model_file"].as<std::string>() << ", " << olaf_walk_keys_.size()
                   << " walk reference keys. Pad: cross = walk, circle = stand (starts standing)." << std::endl;
         std::cout << "[ArtiH1] olaf runtime: first-order hold to " << olaf_actuator_rate_ << " Hz, slew "
-                  << olaf_rate_limit_ << " rad/s, low-pass " << olaf_lowpass_hz_ << " Hz (servo thread)" << std::endl;
+                  << olaf_rate_limit_ << " rad/s, low-pass walk " << olaf_lowpass_hz_ << " Hz / stand "
+                  << olaf_stand_lowpass_hz_ << " Hz (servo thread)" << std::endl;
     }
     if (policy["target_rate_limit"]) target_rate_limit_ = policy["target_rate_limit"].as<double>();
     if (policy["target_lowpass_alpha"]) target_lowpass_alpha_ = policy["target_lowpass_alpha"].as<double>();
@@ -1265,6 +1268,7 @@ void robot::ArtiH1::olaf_servo_set(const std::array<double, 12>& q_des) {
         olaf_q_des_prev_[i] = olaf_q_des_prev_[i] + k * (olaf_q_des_[i] - olaf_q_des_prev_[i]);
     }
     olaf_q_des_ = q_des;
+    olaf_servo_walking_ = olaf_walking_;
     olaf_servo_tick_ = 0;
 }
 
@@ -1293,7 +1297,8 @@ void robot::ArtiH1::olaf_servo_stop() {
 void robot::ArtiH1::olaf_servo_loop() {
     const auto period = std::chrono::nanoseconds(static_cast<long long>(std::llround(1e9 / olaf_actuator_rate_)));
     const int n = std::max(1, static_cast<int>(std::lround(control_dt_ * olaf_actuator_rate_)));
-    const double alpha = olaf_lowpass_hz_ > 0.0 ? 1.0 - std::exp(-2.0 * PI * olaf_lowpass_hz_ / olaf_actuator_rate_) : 1.0;
+    const auto lp_alpha = [this](double hz) { return hz > 0.0 ? 1.0 - std::exp(-2.0 * PI * hz / olaf_actuator_rate_) : 1.0; };
+    const double alpha_walk = lp_alpha(olaf_lowpass_hz_), alpha_stand = lp_alpha(olaf_stand_lowpass_hz_);
     const double slew = olaf_rate_limit_ > 0.0 ? olaf_rate_limit_ / olaf_actuator_rate_ : 1e9;
     motor_interface::motor_command_t cmd[motor_interface::MAX_MOTORS]{};
     std::array<double, NUM_JOINTS> q{};
@@ -1308,6 +1313,7 @@ void robot::ArtiH1::olaf_servo_loop() {
             std::lock_guard<std::mutex> lock(olaf_servo_mutex_);
             olaf_servo_tick_ = std::min(olaf_servo_tick_ + 1, n);
             const double k = static_cast<double>(olaf_servo_tick_) / n;
+            const double alpha = olaf_servo_walking_ ? alpha_walk : alpha_stand;   // per policy (stand may be slower)
             for (std::size_t i = 0; i < NUM_JOINTS; ++i) {
                 double u = olaf_q_des_prev_[i] + k * (olaf_q_des_[i] - olaf_q_des_prev_[i]);
                 u = std::clamp(u, olaf_q_filt_[i] - slew, olaf_q_filt_[i] + slew);

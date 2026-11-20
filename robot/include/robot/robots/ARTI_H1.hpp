@@ -291,7 +291,9 @@ private:
     // slew limit olaf_rate_limit_ (rad/s), low-pass alpha = 1 - exp(-2 pi f_c / actuator_rate); policy order.
     // Mirrors ArtiH1OlafEnv._apply_action (physics step = one servo tick).
     double olaf_actuator_rate_{600.0};
-    double olaf_lowpass_hz_{37.5};
+    double olaf_lowpass_hz_{37.5};          // WALK policy (training value)
+    double olaf_stand_lowpass_hz_{-1.0};    // STAND policy; < 0 = same as olaf_lowpass_hz_
+    bool olaf_servo_walking_{false};        // mode of the q_des in the servo (set with it, under the servo mutex)
     double olaf_rate_limit_{5.24};
     std::mutex olaf_servo_mutex_;
     std::thread olaf_servo_thread_;
