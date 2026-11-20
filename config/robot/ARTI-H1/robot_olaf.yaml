@@ -94,7 +94,7 @@ olaf:
   action_scale: [0.3, 0.3, 0.3, 0.3, 0.7, 0.7, 0.8, 0.8, 0.6, 0.6, 0.35, 0.35]
   walk_stop_timeout: 1.0       # s: WALK -> STAND waits (stepping at zero velocity) for double support, at most this long
   walk_stop_phase_window: [0.40, 0.50]   # gait phase mod 0.5 of the double support at the end of a step (start stance 0.92)
-  walk_stop_hold: 0.3           # s: walk mode with the sticks at zero this long -> STAND policy (no stepping in place)
+  walk_stop_hold: 1000           # s: walk mode with the sticks at zero this long -> STAND policy (no stepping in place)
   walk_start_phase: 0.92        # clock when the WALK policy starts from standing (training reset_stand_pose)
   path_max_distance: 0.10       # m
   path_max_yaw: 0.35            # rad
