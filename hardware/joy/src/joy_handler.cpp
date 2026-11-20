@@ -6,6 +6,7 @@
 
 #include "joy/joy_handler.hpp"
 #include "joy/playstation/dualsense.hpp"
+#include "joy/logitech/f710.hpp"
 
 joy_handler::JoyHandler::~JoyHandler() {
     stop();
@@ -56,6 +57,10 @@ void joy_handler::JoyHandler::load(const std::string& config_file) {
     
     if (type == "dualsense") {
         joy_ = std::make_unique<playstation::DualSense>(device, period, axis_layout);
+    } else if (type == "f710") {
+        joy_ = std::make_unique<logitech::F710>(device, period, axis_layout);
+    } else {
+        throw std::runtime_error("[JoyHandler::load] unknown joy type: " + type + " (dualsense | f710)");
     }
 }
 

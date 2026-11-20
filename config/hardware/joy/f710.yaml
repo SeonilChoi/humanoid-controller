@@ -1,0 +1,5 @@
+# Logitech F710, switch on X (XInput). Read over libusb: device is "vid:pid", axis_layout unused.
+type: f710
+device: 046d:c21f
+period: 4000
+axis_layout: xinput
