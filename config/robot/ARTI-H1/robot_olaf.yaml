@@ -101,7 +101,7 @@ olaf:
   stand_command_rate: [0.05, 0.3, 0.3, 0.5]                                  # per second
   # runtime chain (training action_first_order_hold / action_lowpass_hz / action_rate_limit, sim.dt 1/600)
   actuator_rate: 600.0          # Hz, servo thread
-  action_lowpass_hz: 37.5
+  action_lowpass_hz: 20.0      # 11-20 robot test: 37.5 (training) shook at ~9.6 Hz; sim stand at 20 Hz: gyro std -30%, 5 vs 2 falls / 64 envs / 15 s (final DR)
   action_rate_limit: 5.24       # rad/s
   # state estimate: contact-aided invariant EKF (robot::OlafInEKF = training olaf/inekf.py, ArtiH1OlafEnvCfg.ekf_*)
   contact_tolerance: 0.012      # m, est_contact_tolerance
