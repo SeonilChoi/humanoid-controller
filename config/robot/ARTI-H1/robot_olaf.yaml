@@ -90,6 +90,7 @@ olaf:
   walk_keys_file: ../config/robot/ARTI-H1/olaf_walk_keys.yaml
   reference_knn: 4
   walk_period: 0.8              # s, reference gait period
+  stand_switch_timeout: 1.0     # s: circle -> STAND at the next touchdown (WALK steps in place meanwhile), at most this late
   # OLAF_ACTION_SCALE (policy order): a policy switch resets a(t), a(t-1) to clamp((q - default) / scale) like the env
   action_scale: [0.3, 0.3, 0.3, 0.3, 0.7, 0.7, 0.8, 0.8, 0.6, 0.6, 0.35, 0.35]
   walk_start_phase: 0.92        # clock when the WALK policy starts from standing (training reset_stand_pose)

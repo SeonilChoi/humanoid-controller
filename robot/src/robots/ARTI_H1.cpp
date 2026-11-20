@@ -192,6 +192,7 @@ robot::ArtiH1::ArtiH1(const std::string& config_file, const std::string& model_f
         if (olaf["action_lowpass_hz"]) olaf_lowpass_hz_ = olaf["action_lowpass_hz"].as<double>();
         olaf_stand_lowpass_hz_ = olaf["stand_action_lowpass_hz"] ? olaf["stand_action_lowpass_hz"].as<double>()
                                                                  : olaf_lowpass_hz_;
+        if (olaf["stand_switch_timeout"]) olaf_stand_switch_timeout_ = olaf["stand_switch_timeout"].as<double>();
         if (olaf["action_scale"]) olaf_action_scale_ = read_array<NUM_JOINTS>(olaf, "action_scale");
         if (olaf["action_rate_limit"]) olaf_rate_limit_ = olaf["action_rate_limit"].as<double>();
         const auto keys = YAML::LoadFile(olaf["walk_keys_file"].as<std::string>())["walk_keys"]
@@ -200,7 +201,7 @@ robot::ArtiH1::ArtiH1(const std::string& config_file, const std::string& model_f
         if (olaf_walk_keys_.empty()) throw std::runtime_error("[ArtiH1::ArtiH1] olaf.walk_keys_file has no walk_keys.");
         std::cout << "[ArtiH1] olaf: walk model " << model_file_ << ", stand model "
                   << olaf["stand_model_file"].as<std::string>() << ", " << olaf_walk_keys_.size()
-                  << " walk reference keys. Pad: cross = walk, circle = stand (starts standing)." << std::endl;
+                  << " walk reference keys. Pad: cross = walk, circle = stand at the next touchdown (starts standing)." << std::endl;
         std::cout << "[ArtiH1] olaf runtime: first-order hold to " << olaf_actuator_rate_ << " Hz, slew "
                   << olaf_rate_limit_ << " rad/s, low-pass walk " << olaf_lowpass_hz_ << " Hz / stand "
                   << olaf_stand_lowpass_hz_ << " Hz (servo thread)" << std::endl;
@@ -564,6 +565,8 @@ void robot::ArtiH1::initialize() {
     q_target_ = default_pose_;   // the env resets its joint target to the default pose
     // olaf: start standing (nominal standing reference = the default stance), estimator re-anchors on the first step
     olaf_walking_ = false;
+    olaf_stand_request_ = false;
+    olaf_both_down_prev_ = true;
     olaf_est_init_ = false;
     olaf_est_steps_ = 0;
     olaf_g_.fill(0.0);
@@ -850,7 +853,23 @@ void robot::ArtiH1::observation() {
             olaf_reset_path();
             olaf_switch_reset(motor_status);
             std::cout << "[ArtiH1] olaf: WALK policy" << std::endl;
-        } else if (joy_data.circle && !olaf_prev_circle_ && olaf_walking_) {
+        } else if (joy_data.circle && !olaf_prev_circle_ && olaf_walking_ && !olaf_stand_request_) {
+            olaf_stand_request_ = true;             // switch at the next touchdown (below), stepping at zero velocity
+            olaf_stand_request_time_ = 0.0;
+            std::cout << "[ArtiH1] olaf: STAND requested (switch at the next touchdown)" << std::endl;
+        }
+        const bool both_down = olaf_contact_[0] && olaf_contact_[1];
+        bool stand_now = false;
+        if (olaf_stand_request_) {
+            olaf_stand_request_time_ += control_dt_;
+            const bool touchdown = both_down && !olaf_both_down_prev_;
+            const bool timeout = olaf_stand_request_time_ >= olaf_stand_switch_timeout_;
+            stand_now = touchdown || timeout;
+            if (timeout && !touchdown) std::cout << "[ArtiH1] olaf: no touchdown within the timeout, STAND anyway" << std::endl;
+        }
+        olaf_both_down_prev_ = both_down;
+        if (stand_now) {
+            olaf_stand_request_ = false;
             olaf_walking_ = false;
             olaf_stand_switch_ = true;              // g = the current stick target below (env: g = g_target at reset)
             olaf_reset_path();                      // training: standing episodes from mid-stride start at the torso
@@ -862,7 +881,11 @@ void robot::ArtiH1::observation() {
         const auto dead = [this](double v) { return std::abs(v) < stick_deadzone_ ? 0.0 : v; };
         // stick in [-1, 1] -> [min, max] of the training range (0 stays 0)
         const auto span = [](double v, const std::array<double, 2>& r) { return v >= 0.0 ? v * r[1] : -v * r[0]; };
-        if (olaf_walking_) {
+        if (olaf_walking_ && olaf_stand_request_) {
+            const auto p = olaf_project_walk({0.0, 0.0, 0.0});   // stop request: step in place until the touchdown
+            olaf_g_ = {p[0], p[1], p[2], 0.0};
+            command_ = p;
+        } else if (olaf_walking_) {
             const std::array<double, 3> g{span(dead(joy_data.stick_ly), olaf_walk_range_[0]),
                                           span(-dead(joy_data.stick_lx), olaf_walk_range_[1]),
                                           span(-dead(joy_data.stick_rx), olaf_walk_range_[2])};

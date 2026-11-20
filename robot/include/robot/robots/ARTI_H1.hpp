@@ -248,6 +248,13 @@ private:
     // olaf.action_lowpass_hz (37.5 Hz) in the servo thread (olaf_servo_loop), which writes the motor commands.
     bool olaf_obs_{false};
     bool olaf_walking_{false};
+    // WALK -> STAND (BD-X Sec. VIII-A): circle requests the switch; the WALK policy keeps stepping at zero velocity until
+    // the next touchdown (estimator contact: both soles down now, not both in the previous step), at most
+    // olaf.stand_switch_timeout s. Sim (scripts/eval_switch.py, 256 envs): 17.6 % switch falls vs 24.6 % immediate.
+    bool olaf_stand_request_{false};
+    bool olaf_both_down_prev_{true};
+    double olaf_stand_request_time_{0.0};
+    double olaf_stand_switch_timeout_{1.0};
     // policy switch = env reset (ArtiH1OlafEnv._reset_idx): a(t), a(t-1) = the measured pose as an action,
     // clamp((q - default) / scale, -1, 1), and the servo (q_des ramp, low-pass) restarts at q. Without it the STAND
     // policy saw the WALK's +-1 knee actions in its history and saturated (11-20 robot runs, both knees -1 -> fall).
