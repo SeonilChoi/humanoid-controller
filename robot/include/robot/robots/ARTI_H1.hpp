@@ -247,17 +247,7 @@ private:
     // upsampled with a first-order hold to olaf.actuator_rate (600 Hz), slew limited and low-pass filtered at
     // olaf.action_lowpass_hz (37.5 Hz) in the servo thread (olaf_servo_loop), which writes the motor commands.
     bool olaf_obs_{false};
-    bool olaf_walking_{false};          // WALK policy active (else STAND policy)
-    bool olaf_walk_mode_{false};        // pad mode: cross = walk mode, circle = stand mode. In walk mode the WALK policy
-                                        // runs only while the stick asks for a velocity; zero -> STAND policy (neutral g)
-    double olaf_walk_stop_hold_{0.3};   // s of zero stick before a walk-mode WALK -> STAND switch
-    double olaf_zero_cmd_time_{0.0};
-    // WALK -> STAND only in double support at the end of a step (phase mod 0.5 in [stop_phase_window[0], [1]); both
-    // soles in contact), at the latest stop_timeout s after the stop request. 11-20 robot: a switch in single support
-    // (phase 0.25) fell forward.
-    std::array<double, 2> olaf_stop_phase_window_{0.40, 0.50};
-    double olaf_walk_stop_timeout_{1.0};
-    double olaf_stop_wait_{0.0};
+    bool olaf_walking_{false};
     // policy switch = env reset (ArtiH1OlafEnv._reset_idx): a(t), a(t-1) = the measured pose as an action,
     // clamp((q - default) / scale, -1, 1), and the servo (q_des ramp, low-pass) restarts at q. Without it the STAND
     // policy saw the WALK's +-1 knee actions in its history and saturated (11-20 robot runs, both knees -1 -> fall).

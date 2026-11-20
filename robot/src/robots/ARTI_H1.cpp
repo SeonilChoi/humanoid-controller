@@ -192,10 +192,7 @@ robot::ArtiH1::ArtiH1(const std::string& config_file, const std::string& model_f
         if (olaf["action_lowpass_hz"]) olaf_lowpass_hz_ = olaf["action_lowpass_hz"].as<double>();
         olaf_stand_lowpass_hz_ = olaf["stand_action_lowpass_hz"] ? olaf["stand_action_lowpass_hz"].as<double>()
                                                                  : olaf_lowpass_hz_;
-        if (olaf["walk_stop_hold"]) olaf_walk_stop_hold_ = olaf["walk_stop_hold"].as<double>();
         if (olaf["action_scale"]) olaf_action_scale_ = read_array<NUM_JOINTS>(olaf, "action_scale");
-        if (olaf["walk_stop_timeout"]) olaf_walk_stop_timeout_ = olaf["walk_stop_timeout"].as<double>();
-        if (olaf["walk_stop_phase_window"]) olaf_stop_phase_window_ = read_array<2>(olaf, "walk_stop_phase_window");
         if (olaf["action_rate_limit"]) olaf_rate_limit_ = olaf["action_rate_limit"].as<double>();
         const auto keys = YAML::LoadFile(olaf["walk_keys_file"].as<std::string>())["walk_keys"]
                               .as<std::vector<std::vector<double>>>();
@@ -203,7 +200,7 @@ robot::ArtiH1::ArtiH1(const std::string& config_file, const std::string& model_f
         if (olaf_walk_keys_.empty()) throw std::runtime_error("[ArtiH1::ArtiH1] olaf.walk_keys_file has no walk_keys.");
         std::cout << "[ArtiH1] olaf: walk model " << model_file_ << ", stand model "
                   << olaf["stand_model_file"].as<std::string>() << ", " << olaf_walk_keys_.size()
-                  << " walk reference keys. Pad: cross = walk mode (WALK policy only while the stick commands a velocity, else STAND), circle = stand mode (starts standing)." << std::endl;
+                  << " walk reference keys. Pad: cross = walk, circle = stand (starts standing)." << std::endl;
         std::cout << "[ArtiH1] olaf runtime: first-order hold to " << olaf_actuator_rate_ << " Hz, slew "
                   << olaf_rate_limit_ << " rad/s, low-pass walk " << olaf_lowpass_hz_ << " Hz / stand "
                   << olaf_stand_lowpass_hz_ << " Hz (servo thread)" << std::endl;
@@ -567,9 +564,6 @@ void robot::ArtiH1::initialize() {
     q_target_ = default_pose_;   // the env resets its joint target to the default pose
     // olaf: start standing (nominal standing reference = the default stance), estimator re-anchors on the first step
     olaf_walking_ = false;
-    olaf_walk_mode_ = false;
-    olaf_zero_cmd_time_ = 0.0;
-    olaf_stop_wait_ = 0.0;
     olaf_est_init_ = false;
     olaf_est_steps_ = 0;
     olaf_g_.fill(0.0);
@@ -848,67 +842,40 @@ void robot::ArtiH1::observation() {
         olaf_estimate(world_R_root, root_R_imu * angular_velocity_imu, root_R_imu * accel_imu, imu_root);
         joy_interface::joy_data_t joy_data{};
         joy_handler_->read(joy_data);
-        // pad mode (paper: the Animation Engine switches policies): cross = walk mode, circle = stand mode.
-        // Walk mode runs the WALK policy only while the left / right stick asks for a velocity; with the sticks at zero
-        // (for walk_stop_hold s) it holds still with the STAND policy at the neutral pose instead of stepping in place.
-        if (joy_data.cross && !olaf_prev_cross_ && !olaf_walk_mode_) {
-            olaf_walk_mode_ = true;
-            olaf_zero_cmd_time_ = 0.0;
-            std::cout << "[ArtiH1] olaf: WALK mode (WALK policy while the stick commands a velocity)" << std::endl;
-        } else if (joy_data.circle && !olaf_prev_circle_ && olaf_walk_mode_) {
-            olaf_walk_mode_ = false;
-            std::cout << "[ArtiH1] olaf: STAND mode" << std::endl;
-        }
-        olaf_prev_cross_ = joy_data.cross;
-        olaf_prev_circle_ = joy_data.circle;
-        const auto dead = [this](double v) { return std::abs(v) < stick_deadzone_ ? 0.0 : v; };
-        // stick in [-1, 1] -> [min, max] of the training range (0 stays 0)
-        const auto span = [](double v, const std::array<double, 2>& r) { return v >= 0.0 ? v * r[1] : -v * r[0]; };
-        const std::array<double, 3> g_walk{span(dead(joy_data.stick_ly), olaf_walk_range_[0]),
-                                           span(-dead(joy_data.stick_lx), olaf_walk_range_[1]),
-                                           span(-dead(joy_data.stick_rx), olaf_walk_range_[2])};
-        const bool moving = g_walk[0] != 0.0 || g_walk[1] != 0.0 || g_walk[2] != 0.0;
-        olaf_zero_cmd_time_ = moving ? 0.0 : olaf_zero_cmd_time_ + control_dt_;
-        bool want_walk = olaf_walk_mode_ && (moving || (olaf_walking_ && olaf_zero_cmd_time_ < olaf_walk_stop_hold_));
-        if (olaf_walking_ && !want_walk) {
-            // keep stepping (zero velocity) until both soles are down at the end of a step, then hand over to STAND
-            const double ph = std::fmod(olaf_phase_, 0.5);
-            const bool stance = olaf_contact_[0] && olaf_contact_[1] && ph >= olaf_stop_phase_window_[0] &&
-                                ph < olaf_stop_phase_window_[1];
-            olaf_stop_wait_ += control_dt_;
-            if (!stance && olaf_stop_wait_ < olaf_walk_stop_timeout_) want_walk = true;
-            else if (!stance) std::cout << "[ArtiH1] olaf: no double support within the stop timeout, STAND anyway" << std::endl;
-        } else {
-            olaf_stop_wait_ = 0.0;
-        }
-        if (want_walk && !olaf_walking_) {
+        // policy switch on the pad (paper: the Animation Engine switches policies): cross = walk, circle = stand.
+        // The WALK policy steps in place at zero stick. A switch resets the action history / servo like the env reset.
+        if (joy_data.cross && !olaf_prev_cross_ && !olaf_walking_) {
             olaf_walking_ = true;
             olaf_phase_ = olaf_walk_start_phase_;   // training: walking episodes from the stance start at this phase
             olaf_reset_path();
             olaf_switch_reset(motor_status);
             std::cout << "[ArtiH1] olaf: WALK policy" << std::endl;
-        } else if (!want_walk && olaf_walking_) {
+        } else if (joy_data.circle && !olaf_prev_circle_ && olaf_walking_) {
             olaf_walking_ = false;
             olaf_stand_switch_ = true;              // g = the current stick target below (env: g = g_target at reset)
             olaf_reset_path();                      // training: standing episodes from mid-stride start at the torso
             olaf_switch_reset(motor_status);
             std::cout << "[ArtiH1] olaf: STAND policy" << std::endl;
         }
+        olaf_prev_cross_ = joy_data.cross;
+        olaf_prev_circle_ = joy_data.circle;
+        const auto dead = [this](double v) { return std::abs(v) < stick_deadzone_ ? 0.0 : v; };
+        // stick in [-1, 1] -> [min, max] of the training range (0 stays 0)
+        const auto span = [](double v, const std::array<double, 2>& r) { return v >= 0.0 ? v * r[1] : -v * r[0]; };
         if (olaf_walking_) {
-            const auto p = olaf_project_walk(moving && olaf_walk_mode_ ? g_walk : std::array<double, 3>{0.0, 0.0, 0.0});   // onto the reference coverage, as the env samples g
+            const std::array<double, 3> g{span(dead(joy_data.stick_ly), olaf_walk_range_[0]),
+                                          span(-dead(joy_data.stick_lx), olaf_walk_range_[1]),
+                                          span(-dead(joy_data.stick_rx), olaf_walk_range_[2])};
+            const auto p = olaf_project_walk(g);   // onto the reference coverage, as the env samples g
             olaf_g_ = {p[0], p[1], p[2], 0.0};
             command_ = p;
         } else {
-            if (olaf_walk_mode_) {
-                olaf_g_target_.fill(0.0);   // walk mode standing still: neutral pose (the sticks command velocity)
-            } else {
-                // left stick: pitch (push = nose down, +pitch) / roll (right = lean right, +roll), right stick: yaw
-                // (right = turn right, -yaw) / height (up = higher, +dz); same Euler ZYX convention as the IK grid
-                olaf_g_target_ = {span(dead(joy_data.stick_ry), olaf_stand_range_[0]),
-                                  span(dead(joy_data.stick_lx), olaf_stand_range_[1]),
-                                  span(dead(joy_data.stick_ly), olaf_stand_range_[2]),
-                                  span(-dead(joy_data.stick_rx), olaf_stand_range_[3])};
-            }
+            // left stick: pitch (push = nose down, +pitch) / roll (right = lean right, +roll), right stick: yaw (right =
+            // turn right, -yaw) / height (up = higher, +dz); same Euler ZYX convention as the IK grid
+            olaf_g_target_ = {span(dead(joy_data.stick_ry), olaf_stand_range_[0]),
+                              span(dead(joy_data.stick_lx), olaf_stand_range_[1]),
+                              span(dead(joy_data.stick_ly), olaf_stand_range_[2]),
+                              span(-dead(joy_data.stick_rx), olaf_stand_range_[3])};
             if (olaf_stand_switch_) olaf_g_ = olaf_g_target_;
             olaf_stand_switch_ = false;
             command_ = {0.0, 0.0, 0.0};
