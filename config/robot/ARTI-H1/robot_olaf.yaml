@@ -122,3 +122,4 @@ olaf:
     init_pos: 0.01
     init_gyro_bias: 0.03
     init_accel_bias: 0.2
+    freeze_gyro_bias_z: true    # gyro z bias held at 0 (= ekf_freeze_gyro_bias_z); free, it absorbed the yaw rate (11-23 yaw drift)

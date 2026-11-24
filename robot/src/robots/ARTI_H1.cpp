@@ -185,6 +185,7 @@ robot::ArtiH1::ArtiH1(const std::string& config_file, const std::string& model_f
             get("init_pos", ep.init_pos);
             get("init_gyro_bias", ep.init_gyro_bias);
             get("init_accel_bias", ep.init_accel_bias);
+            if (e["freeze_gyro_bias_z"]) ep.freeze_gyro_bias_z = e["freeze_gyro_bias_z"].as<bool>();
         }
         olaf_ekf_.configure(ep);
         // runtime chain (training action_first_order_hold / action_lowpass_hz / action_rate_limit, sim 600 Hz)

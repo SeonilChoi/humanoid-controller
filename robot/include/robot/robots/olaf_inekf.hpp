@@ -10,6 +10,9 @@
 //   propagate(gyro, accel, dt): strapdown IMU integration, covariance with the log-linear error dynamics
 //   correct(s, contact): forward kinematics s_i = R^T (d_i - p) of each sole in contact; a sole that touches down is
 //   (re)initialised at p + R s_i with the covariance of p; a sole in the air stays in the state unused.
+//   freeze_gyro_bias_z: b_g,z (body z ~ yaw axis) held at 0 (zero initial variance and random walk -> zero gain). Yaw
+//   is unobservable; a free b_g,z absorbed the true yaw rate (11-23: torso turned up to +13 deg/s while the estimated
+//   heading stood still, and the policy kept turning).
 
 #include <algorithm>
 #include <array>
@@ -31,6 +34,7 @@ public:
         double gyro_noise{0.02}, accel_noise{2.0}, gyro_bias_noise{0.002}, accel_bias_noise{0.02};
         double contact_noise{0.05}, fk_noise{0.004};
         double init_rot{0.03}, init_vel{0.05}, init_pos{0.01}, init_gyro_bias{0.03}, init_accel_bias{0.2};
+        bool freeze_gyro_bias_z{false};
     };
 
     void configure(const Params& p) {
@@ -40,6 +44,7 @@ public:
         q.segment<6>(ID).setConstant(p.contact_noise * p.contact_noise);
         q.segment<3>(IBG).setConstant(p.gyro_bias_noise * p.gyro_bias_noise);
         q.segment<3>(IBA).setConstant(p.accel_bias_noise * p.accel_bias_noise);
+        if (p.freeze_gyro_bias_z) q(IBG + 2) = 0.0;
         Qc_ = q.asDiagonal();
         fk_var_ = p.fk_noise * p.fk_noise;
         Vec p0 = Vec::Zero();
@@ -48,6 +53,7 @@ public:
         p0.segment<3>(IP).setConstant(p.init_pos * p.init_pos);
         p0.segment<3>(IBG).setConstant(p.init_gyro_bias * p.init_gyro_bias);
         p0.segment<3>(IBA).setConstant(p.init_accel_bias * p.init_accel_bias);
+        if (p.freeze_gyro_bias_z) p0(IBG + 2) = 0.0;   // zero row / column of P -> zero Kalman gain on b_g,z
         P0_ = p0.asDiagonal();
     }
 
