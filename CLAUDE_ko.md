@@ -82,6 +82,9 @@ RSS 2024)을 따른다. **모드마다 정책을 따로 두고 버튼으로 고�
     학습하지 않은 g를 받지 않는다.
   - STAND: g = 몸통 자세 (dz, roll, pitch, yaw). 왼쪽 스틱 pitch / roll, 오른쪽 스틱 yaw / 높이. 스틱은 목표만 정하고
     g는 초당 `stand_command_rate`만큼 따라간다(env의 속도 제한 추종). 스틱을 갑자기 움직여도 입력이 계단처럼 바뀌지 않는다.
+    11-24부터 STAND 목표는 조작감을 위해 한 번 더 다듬는다(사용자: 너무 확확 반영됨): 데드존 경계에서 계단이 없는 연속
+    데드존, expo 곡선 `olaf.stand_stick_expo` 0.6, 목표에 1차 저역통과 `olaf.stand_target_tau` 0.4 s, `stand_command_rate`는
+    학습 속도의 절반. 모두 학습 때보다 느리므로 정책에는 새로운 입력이 아니다. 예전 조작감은 expo 0 / tau 0 / 학습 속도.
   - 모든 축에 `stick_deadzone` 0.1이 적용된다. 스틱을 놓으면 g = 0이다(WALK: 제자리 걸음, STAND: 기본 자세).
 - **BD-X식 전환:** WALK → STAND는 즉시 일어나지 않는다. circle은 요청만 하고, WALK는 g = 0으로 계속 걷다가 다음 착지
   (양발 접촉) 때 전환한다. 최대 `stand_switch_timeout`(1 s)까지 기다린다. sim(`scripts/eval_switch.py`, walk_09 + stand_07)에서
@@ -99,8 +102,8 @@ RSS 2024)을 따른다. **모드마다 정책을 따로 두고 버튼으로 고�
 
 | 키 | 값 | 맞춰야 할 대상 |
 |---|---|---|
-| `model_file` | `agent_olaf_walk13_480000.onnx` (walk_13) | — |
-| `olaf.stand_model_file` | `agent_olaf_stand_stage5_480000.onnx` (서기 stage5). 되돌릴 파일: `agent_olaf_stand_stage3_480000.onnx` | — |
+| `model_file` | `agent_olaf_walk_smooth_480000.onnx` (walk_10, 11-24부터. walk_13은 실물에서 돌다가 넘어짐) | — |
+| `olaf.stand_model_file` | `agent_olaf_stand_smooth_72000.onnx` (stand_07, 11-24부터. stage4/5는 7~9 Hz로 떨림). 대안: `agent_olaf_stand_stage3_480000.onnx` | — |
 | `olaf.walk_keys_file` | `olaf_walk_keys.yaml` | `export_onnx.py --keys_out` (참조 클립 키) |
 | `policy.control_dt` | 0.02 | 600 Hz에서 decimation 12 |
 | `policy.default_pose` | 서 있는 기본 자세 (hip_pitch 0.33555, knee −0.67109, ankle_pitch −0.33555) | env init joint_pos |
@@ -125,7 +128,8 @@ RSS 2024)을 따른다. **모드마다 정책을 따로 두고 버튼으로 고�
 2. `model_file` / `olaf.stand_model_file`을 새 파일로 바꾼다. 주석에 정책 설명, 주요 sim 수치, 이전 파일(되돌릴 파일)을 적는다.
 3. ONNX 파일과 yaml을 함께 커밋하고, 커밋 메시지에 sim 평가 수치를 남긴다.
 4. `humanoid_sim/CLAUDE.md` 4절 기준을 통과한 정책만 배포한다. 통과하지 못한 기준이 있으면 분명히 밝힌다
-   (서기 stage5는 11-24에 떨림 프록시 0.21 > 0.1인 상태로 사용자 요청에 따라 배포했다).
+   sim 서기 떨림 프록시는 더 이상 기준이 아니다(stage5가 stage4보다 좋게 나왔지만 실물에서 더 떨렸다).
+   서기 정책은 실물 테스트를 거친 뒤에만 채택한다.
 
 ## 7. 실물 테스트 점검 목록
 
@@ -151,7 +155,9 @@ RSS 2024)을 따른다. **모드마다 정책을 따로 두고 버튼으로 고�
 
 ## 9. 열린 문제
 
-- 서기 stage5의 실물 결과. 떨리면 `olaf.stand_model_file`을 `agent_olaf_stand_stage3_480000.onnx`로 되돌린다.
-- 보행 시작 후 첫 약 4 s 동안 추정 yaw가 잠깐 튄다(sim 리플레이에서 확인).
+- walk_10 + bg_z 고정의 왼쪽 회전(11-24에는 오른쪽 회전만 확인)과 새 스틱 다듬기를 적용한 STAND 조작.
+- 직렬 컴플라이언스 DR로 학습한 정책(walk_12/13, 서기 stage4/5)은 실물에서 문제가 있었다. 다음 후보는 그 DR 없이
+  학습한다(humanoid_sim walk_15, 서기 stage6).
+- 보행 시작 후 첫 약 2 s 동안 yaw가 한쪽으로 돈다(실물 11-24: walk_13 −18°, walk_10 −5~−7°).
 - Unitree 버스는 125 Hz(마스터 주기 8 ms)로 지령을 갱신하지만 sim은 이를 모델링하지 않는다.
 - 엔코더 영점 오차: 로봇의 다리 기구학은 엔코더 각도를 쓰고, sim은 참 관절각을 쓴다.

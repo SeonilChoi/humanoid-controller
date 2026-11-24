@@ -92,7 +92,10 @@ each policy's control input g** instead of joint targets. Keep this structure wh
     walk keys) exactly as the env samples it, so the policy never sees a g it was not trained on.
   - STAND: g = trunk pose (dz, roll, pitch, yaw). Left stick pitch / roll, right stick yaw / height. The stick sets a
     target and g follows it at `stand_command_rate` per second (the env's rate-limited follow), so a stick snap does
-    not step the input.
+    not step the input. Since 11-24 the STAND target is also shaped for the operator (they found it too abrupt):
+    continuous deadzone (no step at its edge), expo curve `olaf.stand_stick_expo` 0.6, first-order low-pass
+    `olaf.stand_target_tau` 0.4 s, and `stand_command_rate` at half the training rate. Everything is slower than the
+    training follow, so the policy sees nothing new. Set expo 0 / tau 0 / training rates for the old feel.
   - `stick_deadzone` 0.1 applies to every axis; a released stick is g = 0 (WALK: step in place, STAND: nominal pose).
 - **Transitions as in BD-X:** WALK → STAND is not immediate. Circle sets a request, WALK keeps stepping with g = 0, and
   the switch happens at the next touchdown (both soles in contact), at most `stand_switch_timeout` (1 s) later. In sim
@@ -112,8 +115,8 @@ each policy's control input g** instead of joint targets. Keep this structure wh
 
 | Key | Value | Must match |
 |---|---|---|
-| `model_file` | `agent_olaf_walk13_480000.onnx` (walk_13) | — |
-| `olaf.stand_model_file` | `agent_olaf_stand_stage5_480000.onnx` (stand stage 5). Fallback: `agent_olaf_stand_stage3_480000.onnx` | — |
+| `model_file` | `agent_olaf_walk_smooth_480000.onnx` (walk_10, since 11-24; walk_13 spun and fell on the robot) | — |
+| `olaf.stand_model_file` | `agent_olaf_stand_smooth_72000.onnx` (stand_07, since 11-24; stage 4 / 5 shook at 7-9 Hz). Alternative: `agent_olaf_stand_stage3_480000.onnx` | — |
 | `olaf.walk_keys_file` | `olaf_walk_keys.yaml` | `export_onnx.py --keys_out` (reference clip keys) |
 | `policy.control_dt` | 0.02 | decimation 12 at 600 Hz |
 | `policy.default_pose` | standing pose (hip_pitch 0.33555, knee −0.67109, ankle_pitch −0.33555) | env init joint_pos |
@@ -140,7 +143,8 @@ change them for Olaf.
    numbers, and the previous file (the fallback).
 3. Commit the ONNX files and the yaml together; put the sim evaluation numbers in the commit message.
 4. Deploy only policies that pass the criteria in `humanoid_sim/CLAUDE.md` section 4, or say clearly which criterion
-   they fail (stand stage 5 was deployed on 11-24 with tremor proxy 0.21 > 0.1 at the user's request).
+   they fail. The sim stand tremor proxy is no longer a gate (stage 5 passed it better than stage 4 and shook worse);
+   stand policies are accepted only after a robot test.
 
 ## 7. Robot test checklist
 
@@ -168,7 +172,9 @@ change them for Olaf.
 
 ## 9. Open issues
 
-- Stand stage 5 on the robot: if it shakes, switch `olaf.stand_model_file` back to `agent_olaf_stand_stage3_480000.onnx`.
-- A short spike in the estimated yaw over the first ~4 s of walking (seen in sim replay).
+- Left turns with walk_10 + b_g,z frozen (11-24 tested right turns only) and STAND with the new stick shaping.
+- Policies trained with series-compliance DR (walk_12/13, stand stage 4/5) misbehaved on the robot; next candidates are
+  trained without it (humanoid_sim walk_15, stand stage 6).
+- A yaw transient over the first ~2 s of walking (robot 11-24: walk_13 −18 deg, walk_10 −5 to −7 deg).
 - The Unitree bus updates commands at 125 Hz (8 ms master period); the sim does not model it.
 - Encoder zero errors: the robot's leg kinematics use encoder angles, the sim's use the true joint angles.

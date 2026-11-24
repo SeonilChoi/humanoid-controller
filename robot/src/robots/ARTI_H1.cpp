@@ -168,6 +168,8 @@ robot::ArtiH1::ArtiH1(const std::string& config_file, const std::string& model_f
         for (std::size_t i = 0; i < 3; ++i) olaf_walk_range_[i] = {walk_range[i].at(0), walk_range[i].at(1)};
         for (std::size_t i = 0; i < 4; ++i) olaf_stand_range_[i] = {stand_range[i].at(0), stand_range[i].at(1)};
         olaf_stand_rate_ = read_array<4>(olaf, "stand_command_rate");
+        if (olaf["stand_stick_expo"]) olaf_stand_stick_expo_ = std::clamp(olaf["stand_stick_expo"].as<double>(), 0.0, 1.0);
+        if (olaf["stand_target_tau"]) olaf_stand_target_tau_ = std::max(0.0, olaf["stand_target_tau"].as<double>());
         olaf_knn_ = olaf["reference_knn"].as<int>();
         if (olaf["contact_tolerance"]) olaf_contact_tolerance_ = olaf["contact_tolerance"].as<double>();
         // contact-aided InEKF noise (training ArtiH1OlafEnvCfg.ekf_*)
@@ -572,6 +574,7 @@ void robot::ArtiH1::initialize() {
     olaf_est_steps_ = 0;
     olaf_g_.fill(0.0);
     olaf_g_target_.fill(0.0);
+    olaf_g_target_filt_.fill(0.0);
     olaf_phase_ = olaf_walk_start_phase_;
 }
 
@@ -896,10 +899,24 @@ void robot::ArtiH1::observation() {
         } else {
             // left stick: pitch (push = nose down, +pitch) / roll (right = lean right, +roll), right stick: yaw (right =
             // turn right, -yaw) / height (up = higher, +dz); same Euler ZYX convention as the IK grid
-            olaf_g_target_ = {span(dead(joy_data.stick_ry), olaf_stand_range_[0]),
-                              span(dead(joy_data.stick_lx), olaf_stand_range_[1]),
-                              span(dead(joy_data.stick_ly), olaf_stand_range_[2]),
-                              span(-dead(joy_data.stick_rx), olaf_stand_range_[3])};
+            // stick shaping: deadzone without a step at its edge, then expo (fine control near the centre)
+            const auto shape = [this](double v) {
+                const double m = std::abs(v);
+                if (m < stick_deadzone_) return 0.0;
+                const double x = std::copysign(std::min(1.0, (m - stick_deadzone_) / (1.0 - stick_deadzone_)), v);
+                return (1.0 - olaf_stand_stick_expo_) * x + olaf_stand_stick_expo_ * x * x * x;
+            };
+            const std::array<double, 4> raw{span(shape(joy_data.stick_ry), olaf_stand_range_[0]),
+                                            span(shape(joy_data.stick_lx), olaf_stand_range_[1]),
+                                            span(shape(joy_data.stick_ly), olaf_stand_range_[2]),
+                                            span(-shape(joy_data.stick_rx), olaf_stand_range_[3])};
+            if (olaf_stand_switch_ || olaf_stand_target_tau_ <= 0.0) {
+                olaf_g_target_filt_ = raw;
+            } else {
+                const double a = 1.0 - std::exp(-control_dt_ / olaf_stand_target_tau_);
+                for (std::size_t i = 0; i < 4; ++i) olaf_g_target_filt_[i] += a * (raw[i] - olaf_g_target_filt_[i]);
+            }
+            olaf_g_target_ = olaf_g_target_filt_;   // then followed at stand_command_rate (olaf_advance)
             if (olaf_stand_switch_) olaf_g_ = olaf_g_target_;
             olaf_stand_switch_ = false;
             command_ = {0.0, 0.0, 0.0};

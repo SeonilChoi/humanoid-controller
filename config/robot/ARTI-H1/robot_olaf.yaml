@@ -14,7 +14,7 @@ urdf_file: ../config/robot/ARTI-H1/robot.urdf
 #          right stick left / right = trunk yaw, up / down = trunk height
 # Export: arti_h1_olaf scripts/export_onnx.py --checkpoint <run>/checkpoints/agent_N.pt --out agent_olaf_walk_N.onnx
 # (and the stand run -> agent_olaf_stand_N.onnx); olaf_walk_keys.yaml comes from the same script (--keys_out).
-model_file: ../config/robot/ARTI-H1/agent_olaf_walk_smooth_480000.onnx   # walk_13 agent_480000: walk_12 + yaw-drift penalty; use with ekf.freeze_gyro_bias_z (log replay: in-place yaw |rate| < 0.3 deg/s, 0/32 falls); previous: agent_olaf_walk12_480000.onnx
+model_file: ../config/robot/ARTI-H1/agent_olaf_walk_smooth_480000.onnx   # walk_10 agent_480000 (no series-compliance DR); 11-24 robot with freeze_gyro_bias_z: 130 s walking, in-place yaw +0.4 deg/s. walk_13 (agent_olaf_walk13_480000.onnx) spun and fell within 3.5 s
 log_file: ./arti_h1_olaf_run
 
 motors:
@@ -86,7 +86,7 @@ policy:
   default_pose: [0.0, 0.0, 0.0, 0.0, 0.33555, 0.33555, -0.67109, -0.67109, -0.33555, -0.33554, 0.0, 0.0]
 
 olaf:
-  stand_model_file: ../config/robot/ARTI-H1/agent_olaf_stand_smooth_72000.onnx   # server stage 5 agent_480000: stage 3 + action-acc penalty 10; sim >5 Hz action power 0.21 (stage 4 0.35 shook on 11-23, stage 3 0.09 did not) -> if it shakes, go back to agent_olaf_stand_stage3_480000.onnx; previous: agent_olaf_stand_stage4_264000.onnx
+  stand_model_file: ../config/robot/ARTI-H1/agent_olaf_stand_smooth_72000.onnx   # stand_07 agent_72000 (no series-compliance DR): no tremor on 11-21 / 11-24. stage 4 / stage 5 (compliance DR) shook at 7-9 Hz (stage 5 worst)
   walk_keys_file: ../config/robot/ARTI-H1/olaf_walk_keys.yaml
   reference_knn: 4
   walk_period: 0.8              # s, reference gait period
@@ -101,7 +101,11 @@ olaf:
   # control input ranges = training (full stick = max / min)
   walk_command_range: [[-0.12, 0.15], [-0.068, 0.068], [-0.40, 0.40]]       # vx m/s, vy m/s, wz rad/s
   stand_command_range: [[-0.03, 0.015], [-0.10, 0.10], [-0.15, 0.15], [-0.30, 0.30]]   # dz m, roll, pitch, yaw rad
-  stand_command_rate: [0.05, 0.3, 0.3, 0.5]                                  # per second
+  # STAND stick feel (11-24, operator: commands came in too abruptly). Slower than training (rates there: 0.05 0.3 0.3 0.5),
+  # so the policy sees nothing new. Full-range roll now takes ~0.7 s instead of ~0.3 s; 0 / 0 / training rates = old feel.
+  stand_command_rate: [0.025, 0.15, 0.15, 0.25]                              # per second (half the training follow rate)
+  stand_stick_expo: 0.6         # 0 = linear stick, 1 = cubic (fine control near the centre)
+  stand_target_tau: 0.4         # s, first-order low-pass on the stick target before the rate limit
   # runtime chain (training action_first_order_hold / action_lowpass_hz / action_rate_limit, sim.dt 1/600)
   actuator_rate: 600.0          # Hz, servo thread
   action_lowpass_hz: 37.5       # WALK policy = training. 11-20: 20 Hz made the sim walk fall 33x more (1 -> 33 / 64 envs / 15 s)

@@ -291,6 +291,12 @@ private:
     double olaf_phase_{0.0};
     std::array<double, 4> olaf_g_{};
     std::array<double, 4> olaf_g_target_{};
+    // STAND stick shaping (operator comfort; slower than the training follow, so still in distribution):
+    // continuous deadzone, expo curve (olaf.stand_stick_expo, 0 = linear) and a first-order low-pass on the target
+    // (olaf.stand_target_tau s, 0 = off) before the stand_command_rate limit
+    double olaf_stand_stick_expo_{0.0};
+    double olaf_stand_target_tau_{0.0};
+    std::array<double, 4> olaf_g_target_filt_{};
     bool olaf_prev_cross_{false};
     bool olaf_prev_circle_{false};
     bool olaf_stand_switch_{false};
