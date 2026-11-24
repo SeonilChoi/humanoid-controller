@@ -1,6 +1,6 @@
 # humanoid_controller, 브랜치 `arti-h1-olaf`: Claude 작업 지침
 
-이 worktree는 Olaf 방식(arXiv 2512.16705)의 **보행 정책과 서기 정책**을 실물 ARTI-H1 KB 로봇에서 돌린다.
+이 저장소는 Olaf 방식(arXiv 2512.16705)의 **보행 정책과 서기 정책**을 실물 ARTI-H1 로봇에서 돌린다.
 정책은 `/opt/isaac/projects/humanoid_sim`(`arti_h1_olaf`의 후속)에서 학습한다. 학습 내역, real2sim, 평가 기준은
 그 프로젝트의 `CLAUDE.md`를 본다. 이 문서는 컨트롤러 쪽만 다룬다. 영어판은 `CLAUDE.md`이고, 두 파일은 같은 내용으로 유지한다.
 
@@ -15,10 +15,9 @@
 
 ## 2. 저장소와 작업 규칙
 
-- **worktree:** `/opt/isaac/projects/humanoid_controller_olaf` = SeonilChoi/humanoid_controller의 `arti-h1-olaf` 브랜치.
-  같은 저장소의 다른 worktree: `/opt/isaac/projects/humanoid_controller`(`arti-h1-new-pelvis`),
-  `/opt/isaac/projects/humanoid_controller_d1`(`arti-d1`). git 명령은 이 폴더에서만 실행한다.
-- **git stash는 다른 worktree, 다른 세션과 공유된다.** `git stash` / `git stash pop`을 그냥 쓰지 말고, 임시 WIP 커밋을 쓴다.
+- **저장소:** `/opt/isaac/projects/humanoid_controller_olaf`는 SeonilChoi/humanoid_controller의 `arti-h1-olaf` 브랜치를 받은
+  독립 저장소다(11-24부터. 그 전에는 `/opt/isaac/projects/humanoid_controller`의 worktree였는데 원본이 지워졌다).
+  다른 브랜치(`arti-h1-new-pelvis`, `arti-d1` 등)는 원격에만 있다. `git stash`보다 임시 WIP 커밋을 쓴다.
 - **자격 증명:** 셸에 없다. 사용자가 직접 push하거나 메시지로 토큰을 준다. 토큰은 그 push 명령에서만 쓰고
   (`https://x-access-token:<token>@github.com/SeonilChoi/humanoid_controller.git arti-h1-olaf:arti-h1-olaf`) 저장하지 않는다.
   커밋과 push는 요청받았을 때만 한다. 사용자가 로봇 PC에서 이 브랜치로 로그를 커밋하므로, 커밋 전에 `git fetch`하고
@@ -104,7 +103,7 @@ RSS 2024)을 따른다. **모드마다 정책을 따로 두고 버튼으로 고�
 | `olaf.stand_model_file` | `agent_olaf_stand_stage5_480000.onnx` (서기 stage5). 되돌릴 파일: `agent_olaf_stand_stage3_480000.onnx` | — |
 | `olaf.walk_keys_file` | `olaf_walk_keys.yaml` | `export_onnx.py --keys_out` (참조 클립 키) |
 | `policy.control_dt` | 0.02 | 600 Hz에서 decimation 12 |
-| `policy.default_pose` | KB 자세 (hip_pitch 0.33555, knee −0.67109, ankle_pitch −0.33555) | env init joint_pos |
+| `policy.default_pose` | 서 있는 기본 자세 (hip_pitch 0.33555, knee −0.67109, ankle_pitch −0.33555) | env init joint_pos |
 | `olaf.action_scale` | [0.3 ×4, 0.7, 0.7, 0.8, 0.8, 0.6, 0.6, 0.35, 0.35] | `OLAF_ACTION_SCALE` |
 | `olaf.walk_period`, `walk_start_phase` | 0.8 s, 0.92 | 참조 주기, `walk_start_phase` |
 | `olaf.path_max_distance`, `path_max_yaw`, `stand_path_tau` | 0.10 m, 0.35 rad, 0.5 s | cfg의 같은 이름 |
@@ -114,7 +113,7 @@ RSS 2024)을 따른다. **모드마다 정책을 따로 두고 버튼으로 고�
 | `olaf.contact_tolerance`, `olaf.ekf.*` | 0.012 m, 노이즈 값, `freeze_gyro_bias_z: true` | `est_contact_tolerance`, `ekf_*`, `ekf_freeze_gyro_bias_z` |
 | `foots[].offset`, `sensors[].translation` | 발바닥 (−0.026, 0, −0.051), IMU (0.04688, 0, 0.34667) | `ARTI_H1_*_FOOT_OFFSET_FROM_FOOT_LINK`, IMU 오프셋 |
 
-모터 호밍과 관절 영점(−20/40/−20°)은 `motor.yaml`에 있고 KB / velocity 라인과 공유한다. Olaf 때문에 바꾸지 않는다.
+모터 호밍과 관절 영점(−20/40/−20°)은 `motor.yaml`에 있고 velocity 정책 라인과 공유한다. Olaf 때문에 바꾸지 않는다.
 
 ## 6. 새 정책 배포
 

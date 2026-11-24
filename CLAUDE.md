@@ -1,6 +1,6 @@
 # humanoid_controller, branch `arti-h1-olaf`: working notes for Claude
 
-This worktree runs the Olaf-style (arXiv 2512.16705) **walking and standing policies** on the real ARTI-H1 KB robot.
+This repository runs the Olaf-style (arXiv 2512.16705) **walking and standing policies** on the real ARTI-H1 robot.
 The policies are trained in `/opt/isaac/projects/humanoid_sim` (successor of `arti_h1_olaf`). Read that project's
 `CLAUDE.md` for the training history, real2sim and the evaluation criteria. This file covers the controller side.
 A Korean version is in `CLAUDE_ko.md`; keep the two in sync.
@@ -18,11 +18,10 @@ A Korean version is in `CLAUDE_ko.md`; keep the two in sync.
 
 ## 2. Repository and working rules
 
-- **Worktree:** `/opt/isaac/projects/humanoid_controller_olaf` = branch `arti-h1-olaf` of SeonilChoi/humanoid_controller.
-  Other worktrees of the same repo: `/opt/isaac/projects/humanoid_controller` (`arti-h1-new-pelvis`) and
-  `/opt/isaac/projects/humanoid_controller_d1` (`arti-d1`). Run git commands from this directory only.
-- **git stash is shared** with the other worktrees and sessions. Never use bare `git stash` / `git stash pop`; prefer a
-  temporary WIP commit.
+- **Checkout:** `/opt/isaac/projects/humanoid_controller_olaf` is a standalone clone of SeonilChoi/humanoid_controller on
+  branch `arti-h1-olaf` (since 11-24; it used to be a worktree of `/opt/isaac/projects/humanoid_controller`, which was
+  removed). The other branches (`arti-h1-new-pelvis`, `arti-d1`, ...) are only on the remote. Prefer a temporary WIP
+  commit over `git stash`.
 - **Credentials:** the shell has none. The user pushes, or gives a token in a message; use it only in that push command
   (`https://x-access-token:<token>@github.com/SeonilChoi/humanoid_controller.git arti-h1-olaf:arti-h1-olaf`) and never
   store it. Commit and push only when asked. The user also commits robot logs to this branch from the robot PC, so
@@ -117,7 +116,7 @@ each policy's control input g** instead of joint targets. Keep this structure wh
 | `olaf.stand_model_file` | `agent_olaf_stand_stage5_480000.onnx` (stand stage 5). Fallback: `agent_olaf_stand_stage3_480000.onnx` | — |
 | `olaf.walk_keys_file` | `olaf_walk_keys.yaml` | `export_onnx.py --keys_out` (reference clip keys) |
 | `policy.control_dt` | 0.02 | decimation 12 at 600 Hz |
-| `policy.default_pose` | KB stance (hip_pitch 0.33555, knee −0.67109, ankle_pitch −0.33555) | env init joint_pos |
+| `policy.default_pose` | standing pose (hip_pitch 0.33555, knee −0.67109, ankle_pitch −0.33555) | env init joint_pos |
 | `olaf.action_scale` | [0.3 ×4, 0.7, 0.7, 0.8, 0.8, 0.6, 0.6, 0.35, 0.35] | `OLAF_ACTION_SCALE` |
 | `olaf.walk_period`, `walk_start_phase` | 0.8 s, 0.92 | reference period, `walk_start_phase` |
 | `olaf.path_max_distance`, `path_max_yaw`, `stand_path_tau` | 0.10 m, 0.35 rad, 0.5 s | same names in the cfg |
@@ -127,7 +126,7 @@ each policy's control input g** instead of joint targets. Keep this structure wh
 | `olaf.contact_tolerance`, `olaf.ekf.*` | 0.012 m, noise values, `freeze_gyro_bias_z: true` | `est_contact_tolerance`, `ekf_*`, `ekf_freeze_gyro_bias_z` |
 | `foots[].offset`, `sensors[].translation` | sole (−0.026, 0, −0.051), IMU (0.04688, 0, 0.34667) | `ARTI_H1_*_FOOT_OFFSET_FROM_FOOT_LINK`, IMU offset |
 
-Motor homing and joint zero (−20/40/−20 deg) are in `motor.yaml` and are shared with the KB / velocity line; do not
+Motor homing and joint zero (−20/40/−20 deg) are in `motor.yaml` and are shared with the velocity-policy line; do not
 change them for Olaf.
 
 ## 6. Deploying new policies
