@@ -14,7 +14,7 @@ urdf_file: ../config/robot/ARTI-H1/robot.urdf
 #          right stick left / right = trunk yaw, up / down = trunk height
 # Export: arti_h1_olaf scripts/export_onnx.py --checkpoint <run>/checkpoints/agent_N.pt --out agent_olaf_walk_N.onnx
 # (and the stand run -> agent_olaf_stand_N.onnx); olaf_walk_keys.yaml comes from the same script (--keys_out).
-model_file: ../config/robot/ARTI-H1/agent_olaf_walk12_480000.onnx   # walk_12 agent_480000: walk_11 + series joint compliance / est-z drift DR (real2sim v2); previous: agent_olaf_walk_smooth_480000.onnx (walk_10)
+model_file: ../config/robot/ARTI-H1/agent_olaf_walk13_480000.onnx   # walk_13 agent_480000: walk_12 + yaw-drift penalty; use with ekf.freeze_gyro_bias_z (log replay: in-place yaw |rate| < 0.3 deg/s, 0/32 falls); previous: agent_olaf_walk12_480000.onnx
 log_file: ./arti_h1_olaf_run
 
 motors:
@@ -86,7 +86,7 @@ policy:
   default_pose: [0.0, 0.0, 0.0, 0.0, 0.33555, 0.33555, -0.67109, -0.67109, -0.33555, -0.33554, 0.0, 0.0]
 
 olaf:
-  stand_model_file: ../config/robot/ARTI-H1/agent_olaf_stand_stage4_264000.onnx   # server stage 4 agent_264000: stage 3 + series joint compliance DR, compliance switch bank; previous: agent_olaf_stand_stage3_480000.onnx
+  stand_model_file: ../config/robot/ARTI-H1/agent_olaf_stand_stage5_480000.onnx   # server stage 5 agent_480000: stage 3 + action-acc penalty 10; sim >5 Hz action power 0.21 (stage 4 0.35 shook on 11-23, stage 3 0.09 did not) -> if it shakes, go back to agent_olaf_stand_stage3_480000.onnx; previous: agent_olaf_stand_stage4_264000.onnx
   walk_keys_file: ../config/robot/ARTI-H1/olaf_walk_keys.yaml
   reference_knn: 4
   walk_period: 0.8              # s, reference gait period
