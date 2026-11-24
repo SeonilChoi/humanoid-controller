@@ -79,6 +79,36 @@ Key behaviour:
 - **Per-mode low-pass:** walking 37.5 Hz (= training), standing 20 Hz (`stand_action_lowpass_hz`, an 11-20 robot fix
   for the stand shake).
 
+## 4a. Joystick: policy switching and adjustment (BD-X reference)
+
+The operator interface follows Disney's BD-X robot (Grandia et al., "Design and Control of a Bipedal Robotic
+Character", RSS 2024), the predecessor of Olaf: **separate policies per mode, chosen with buttons, and the sticks set
+each policy's control input g** instead of joint targets. Keep this structure when changing the pad handling.
+
+- **Mode buttons:** cross = WALK, circle = STAND (rising edge only). The robot starts in STAND. Only one policy runs at
+  a time; the other ONNX stays loaded.
+- **Sticks are the policy's control input, per mode:**
+  - WALK: g = path velocity (vx, vy, wz). Left stick vx / vy, right stick left / right = wz. Full stick = the training
+    command range; the command is projected onto the reference coverage (`olaf_project_walk`, the 4-NN blend of the
+    walk keys) exactly as the env samples it, so the policy never sees a g it was not trained on.
+  - STAND: g = trunk pose (dz, roll, pitch, yaw). Left stick pitch / roll, right stick yaw / height. The stick sets a
+    target and g follows it at `stand_command_rate` per second (the env's rate-limited follow), so a stick snap does
+    not step the input.
+  - `stick_deadzone` 0.1 applies to every axis; a released stick is g = 0 (WALK: step in place, STAND: nominal pose).
+- **Transitions as in BD-X:** WALK → STAND is not immediate. Circle sets a request, WALK keeps stepping with g = 0, and
+  the switch happens at the next touchdown (both soles in contact), at most `stand_switch_timeout` (1 s) later. In sim
+  (`scripts/eval_switch.py`, walk_09 + stand_07) this cut switch falls from 24.6 % (immediate) to 17.6 %. STAND → WALK
+  starts the walking clock at `walk_start_phase` 0.92 from the standing pose (the env's reset_stand_pose).
+- **Where we differ from BD-X:** BD-X passes the action history through a switch because its actions are smooth. Ours
+  are not (the walk policy saturates the knees), and feeding walk's ±1 actions to the stand policy made the robot fall
+  on 11-20. So every switch resets a(t), a(t−1) from the measured pose (`olaf_switch_reset`), mirroring `_reset_idx`.
+  The path frame is also reset to the pelvis on each switch (`olaf_reset_path`).
+- **Tried and removed (11-20):** auto-STAND when the sticks are released in WALK (`walk_stop_hold`) and a
+  double-support phase gate. The user chose to keep explicit button switching; do not reintroduce auto-switching
+  without asking.
+- Any change here must keep the training side consistent: the stand policy trains from walk-policy switch states
+  (`switch_bank_file`, `reset_walk_pose_fraction`) and the walk policy from the standing pose at `walk_start_phase`.
+
 ## 5. Configuration (`config/robot/ARTI-H1/robot_olaf.yaml`)
 
 | Key | Value | Must match |

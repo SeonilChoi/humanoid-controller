@@ -69,6 +69,33 @@ cd ~/humanoid_controller_olaf/build
 - **서보 시작:** 첫 q_des로 바로 점프하지 않고 서 있는 자세에서 ramp한다.
 - **모드별 LPF:** 보행 37.5 Hz(= 학습), 서기 20 Hz(`stand_action_lowpass_hz`, 11-20 서기 떨림 때문에 실물에서 넣은 설정).
 
+## 4a. 조이스틱: 정책 전환과 조정 (BD-X 참고)
+
+조작 방식은 Olaf의 전작인 Disney BD-X 로봇(Grandia et al., "Design and Control of a Bipedal Robotic Character",
+RSS 2024)을 따른다. **모드마다 정책을 따로 두고 버튼으로 고르며, 스틱은 관절 목표가 아니라 각 정책의 제어 입력 g를 정한다.**
+패드 처리를 바꿀 때도 이 구조를 유지한다.
+
+- **모드 버튼:** cross = WALK, circle = STAND (누르는 순간에만 반응). 로봇은 STAND로 시작한다. 한 번에 한 정책만 돌고,
+  다른 ONNX는 로드된 채로 대기한다.
+- **스틱은 모드별 정책 제어 입력이다:**
+  - WALK: g = 경로 속도 (vx, vy, wz). 왼쪽 스틱 vx / vy, 오른쪽 스틱 좌우 = wz. 스틱 끝 = 학습 명령 범위.
+    명령은 env가 g를 뽑을 때와 똑같이 참조 범위로 투영한다(`olaf_project_walk`, 보행 키 4-NN 블렌드). 그래서 정책은
+    학습하지 않은 g를 받지 않는다.
+  - STAND: g = 몸통 자세 (dz, roll, pitch, yaw). 왼쪽 스틱 pitch / roll, 오른쪽 스틱 yaw / 높이. 스틱은 목표만 정하고
+    g는 초당 `stand_command_rate`만큼 따라간다(env의 속도 제한 추종). 스틱을 갑자기 움직여도 입력이 계단처럼 바뀌지 않는다.
+  - 모든 축에 `stick_deadzone` 0.1이 적용된다. 스틱을 놓으면 g = 0이다(WALK: 제자리 걸음, STAND: 기본 자세).
+- **BD-X식 전환:** WALK → STAND는 즉시 일어나지 않는다. circle은 요청만 하고, WALK는 g = 0으로 계속 걷다가 다음 착지
+  (양발 접촉) 때 전환한다. 최대 `stand_switch_timeout`(1 s)까지 기다린다. sim(`scripts/eval_switch.py`, walk_09 + stand_07)에서
+  전환 뒤 넘어짐이 24.6%(즉시 전환)에서 17.6%로 줄었다. STAND → WALK는 서 있는 자세에서 보행 클럭 `walk_start_phase` 0.92로
+  시작한다(env의 reset_stand_pose).
+- **BD-X와 다른 점:** BD-X는 출력이 매끄러워서 전환 때 출력 이력을 그대로 넘긴다. 우리 보행 정책은 무릎 출력이 포화될
+  만큼 매끄럽지 않고, 보행의 ±1 출력을 서기 정책에 넘겼다가 11-20에 넘어졌다. 그래서 전환할 때마다 a(t), a(t−1)을
+  측정 자세로 다시 설정한다(`olaf_switch_reset`, `_reset_idx`와 동일). 경로 좌표계도 전환 때 골반 위치로 리셋한다(`olaf_reset_path`).
+- **시도했다가 뺀 것 (11-20):** WALK에서 스틱을 놓으면 자동으로 STAND로 바꾸는 기능(`walk_stop_hold`)과 양발 지지 위상
+  게이트. 사용자가 버튼으로 명시적으로 전환하는 방식을 택했으니, 묻지 않고 자동 전환을 다시 넣지 않는다.
+- 여기를 바꾸면 학습 쪽도 맞춰야 한다. 서기 정책은 보행 정책의 전환 상태(`switch_bank_file`, `reset_walk_pose_fraction`)에서,
+  보행 정책은 `walk_start_phase`의 서 있는 자세에서 시작하도록 학습한다.
+
 ## 5. 설정 (`config/robot/ARTI-H1/robot_olaf.yaml`)
 
 | 키 | 값 | 맞춰야 할 대상 |
