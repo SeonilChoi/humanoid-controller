@@ -86,7 +86,7 @@ policy:
   default_pose: [0.0, 0.0, 0.0, 0.0, 0.33555, 0.33555, -0.67109, -0.67109, -0.33555, -0.33554, 0.0, 0.0]
 
 olaf:
-  stand_model_file: ../config/robot/ARTI-H1/agent_olaf_stand_smooth_72000.onnx   # stand_07 agent_72000 (no series-compliance DR): no tremor on 11-21 / 11-24. stage 4 / stage 5 (compliance DR) shook at 7-9 Hz (stage 5 worst)
+  stand_model_file: ../config/robot/ARTI-H1/agent_olaf_stand_stage6_480000.onnx   # stage 6 agent_480000 (stage 3 + no series-compliance DR, b_g,z frozen, 20 Hz low-pass); sim vs stand_07: falls 127 vs 380 (push), 23 vs 125 (no push), walk_15 -> stand switch 23 vs 65 %. Fallback if it shakes: agent_olaf_stand_smooth_72000.onnx = stand_07 (no tremor on 11-21 / 11-24). stage 4 / stage 5 (compliance DR) shook at 7-9 Hz
   walk_keys_file: ../config/robot/ARTI-H1/olaf_walk_keys.yaml
   reference_knn: 4
   walk_period: 0.8              # s, reference gait period
