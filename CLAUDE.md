@@ -42,7 +42,8 @@ cd ~/humanoid_controller_olaf/build
 ./ARTI-H1 ../config/robot/ARTI-H1/robot_olaf.yaml --observe   # estimator / observation check, no policy
 ```
 Other flags: `--imu-calib` / `--no-imu-calib` (default `policy.imu_still_time: 10` s of gyro bias and attitude
-convergence), `--blind-imu`, `--model <onnx>`. Ctrl+C stops and flushes the log.
+convergence), `--blind-imu`, `--model <onnx>`, `--no-torque` (home, then both legs limp: put the robot on the
+jig at the joint zero and read the suggested `homing_offset` per motor; README). Ctrl+C stops and flushes the log.
 
 Sticks: WALK left stick = path vx / vy, right stick left / right = turn (vx −0.12..0.15 m/s, vy ±0.068 m/s,
 wz ±0.4 rad/s, projected onto the reference keys as in training). STAND left stick = trunk pitch / roll, right stick =
@@ -115,8 +116,8 @@ each policy's control input g** instead of joint targets. Keep this structure wh
 
 | Key | Value | Must match |
 |---|---|---|
-| `model_file` | `agent_olaf_walk_smooth_480000.onnx` (walk_10, since 11-24; walk_13 spun and fell on the robot) | — |
-| `olaf.stand_model_file` | `agent_olaf_stand_smooth_72000.onnx` (stand_07, since 11-24; stage 4 / 5 shook at 7-9 Hz). Alternative: `agent_olaf_stand_stage3_480000.onnx` | — |
+| `model_file` | `agent_olaf_walk15_480000.onnx` (walk_15, since 11-25, robot test pending). Fallback: `agent_olaf_walk_smooth_480000.onnx` (walk_10); walk_13 spun and fell on the robot | — |
+| `olaf.stand_model_file` | `agent_olaf_stand_stage6_480000.onnx` (stage 6, since 11-26, robot test pending). Fallback: `agent_olaf_stand_smooth_72000.onnx` (stand_07); stage 4 / 5 shook at 7-9 Hz | — |
 | `olaf.walk_keys_file` | `olaf_walk_keys.yaml` | `export_onnx.py --keys_out` (reference clip keys) |
 | `policy.control_dt` | 0.02 | decimation 12 at 600 Hz |
 | `policy.default_pose` | standing pose (hip_pitch 0.33555, knee −0.67109, ankle_pitch −0.33555) | env init joint_pos |

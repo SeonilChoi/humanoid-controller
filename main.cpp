@@ -19,12 +19,12 @@ void on_sigint(int) { running = 0; }
 int main(int argc, char* argv[])
 {
     const auto usage = [&]() {
-        std::cerr << "Usage: " << argv[0] << " <config_file> [--ppo | --model <file.onnx>] [--observe [--limp-right] | --blind-imu] [--imu-calib | --no-imu-calib]" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " <config_file> [--ppo | --model <file.onnx>] [--observe | --no-torque | --blind-imu] [--imu-calib | --no-imu-calib]" << std::endl;
         std::cerr << "  --ppo        run the RL-only (PPO) policy: robot.yaml ppo_model_file instead of model_file (AMP)" << std::endl;
         std::cerr << "  --model F    run the ONNX policy F instead of robot.yaml model_file (same obs / q_des interface)" << std::endl;
         std::cerr << "  --observe    home, stand in the default pose and print the observation at 5 Hz (no policy)" << std::endl;
-        std::cerr << "  --limp-right with --observe: right leg limp (kp 0), prints the right-leg zero error vs the left leg" << std::endl;
-        std::cerr << "               (SUPPORT THE ROBOT: it cannot stand on the right leg in this mode)" << std::endl;
+        std::cerr << "  --no-torque  home, then BOTH legs limp (kp 0, damping only, no policy): put the robot on the jig at the" << std::endl;
+        std::cerr << "               joint zero and read each joint and the suggested homing_offset (SUPPORT THE ROBOT)" << std::endl;
         std::cerr << "  --blind-imu  test: the policy gets the standing tilt and zero angular velocity instead of the IMU" << std::endl;
         std::cerr << "               (the IMU is still logged and still stops the robot on a fall)" << std::endl;
         std::cerr << "  --imu-calib  IMU stabilisation after standing up: gyro bias average (policy.imu_still_time, 10 s if 0) and" << std::endl;
@@ -40,14 +40,15 @@ int main(int argc, char* argv[])
     std::string model_file;
     bool observe = false;
     bool blind_imu = false;
-    bool limp_right = false;
+    bool no_torque = false;
     int imu_calib = -1;   // -1 = yaml (policy.imu_still_time), 0 = off, 1 = on
     for (int i = 2; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--observe") {
             observe = true;
-        } else if (arg == "--limp-right") {
-            limp_right = true;
+        } else if (arg == "--no-torque") {
+            no_torque = true;
+            observe = true;   // same loop as --observe, no policy
         } else if (arg == "--imu-calib") {
             imu_calib = 1;
         } else if (arg == "--no-imu-calib") {
@@ -68,11 +69,6 @@ int main(int argc, char* argv[])
             usage();
             return 1;
         }
-    }
-
-    if (limp_right && !observe) {
-        std::cerr << "[main] --limp-right only works with --observe." << std::endl;
-        return 1;
     }
 
     std::signal(SIGINT, on_sigint);
@@ -100,7 +96,7 @@ int main(int argc, char* argv[])
             // logged at the control rate (policy.control_dt) and printed at ~5 Hz
             const auto kObservePeriod = std::chrono::microseconds(std::llround(robot.control_dt() * 1e6));
             const int print_every = std::max(1, static_cast<int>(std::lround(0.2 / robot.control_dt())));
-            if (limp_right) robot.set_limp_right();
+            if (no_torque) robot.set_no_torque();
             auto next_wakeup = std::chrono::steady_clock::now();
             int tick = 0;
             while (running) {
@@ -108,7 +104,7 @@ int main(int argc, char* argv[])
                 robot.observation();
                 robot.log_observation();
                 robot.update_limp_stats();
-                if (limp_right) {
+                if (no_torque) {
                     if (tick++ % (2 * print_every + print_every / 2) == 0) robot.print_limp_report();   // 2 Hz
                 } else if (tick++ % print_every == 0) {
                     robot.print_observation();

@@ -370,22 +370,21 @@ void robot::ArtiH1::print_observation() const {
     std::fflush(stdout);
 }
 
-void robot::ArtiH1::set_limp_right() {
+void robot::ArtiH1::set_no_torque() {
     for (std::size_t i = 0; i < NUM_JOINTS; ++i) {
-        if (std::string(kPolicyJointNames[i]).rfind("right_", 0) != 0) continue;
         const auto motor_index = joint_id_to_motor_index_.at(kinematics_->joint_id(kPolicyJointNames[i]));
         motor_command_[motor_index].kp = 0.0;
         motor_command_[motor_index].kd = policy_kd_[motor_index];
     }
     motor_manager_->write(motor_command_);
-    limp_right_ = true;
+    no_torque_ = true;
     limp_stats_init_ = false;
-    std::cout << "[ArtiH1] --limp-right: right-leg motors kp 0 (damping only). Hold the pelvis level and press both soles"
-                 " flat on the floor, the right foot as the mirror image of the left." << std::endl;
+    std::cout << "[ArtiH1] --no-torque: all leg motors kp 0 (damping only). Put the robot on the jig with every joint at"
+                 " its zero; copy the suggested homing_offset into motor.yaml once the numbers are steady." << std::endl;
 }
 
 void robot::ArtiH1::update_limp_stats() {
-    if (!limp_right_) return;
+    if (!no_torque_) return;
     constexpr double kAlpha = 1.0 / 120.0;   // ~2 s at 60 Hz
     for (std::size_t i = 0; i < NUM_JOINTS; ++i) {
         const auto motor_index = joint_id_to_motor_index_.at(kinematics_->joint_id(kPolicyJointNames[i]));
@@ -396,24 +395,20 @@ void robot::ArtiH1::update_limp_stats() {
 }
 
 void robot::ArtiH1::print_limp_report() const {
-    if (!limp_right_ || !limp_stats_init_) return;
+    if (!no_torque_ || !limp_stats_init_) return;
     constexpr double DEG = 180.0 / PI;
-    double roll = 0.0, pitch = 0.0;
-    if (observation_.size() >= 6) {
-        roll = std::atan2(observation_[4], -observation_[5]) * DEG;
-        pitch = std::atan2(-observation_[3], -observation_[5]) * DEG;
-    }
-    std::printf("\n[limp] pelvis roll %+5.2f pitch %+5.2f deg (keep both near 0)   ~2 s averages:\n", roll, pitch);
-    std::printf("[limp] joint        left(deg)  right(deg)  right-left(deg)  right motor id  homing_offset now -> suggested\n");
+    std::printf("\n[no-torque] ~2 s averages; jig pose = joint zero (reading should be 0)\n");
+    std::printf("[no-torque] joint         reading(deg)  motor id  homing_offset now -> suggested   | right-left(deg)\n");
     // policy order is (left, right) pairs: hip_yaw, hip_roll, hip_pitch, knee, ankle_pitch, ankle_roll
-    for (std::size_t i = 0; i + 1 < NUM_JOINTS; i += 2) {
-        const double l = limp_mean_pos_[i], r = limp_mean_pos_[i + 1];
-        const auto motor_index = joint_id_to_motor_index_.at(kinematics_->joint_id(kPolicyJointNames[i + 1]));
+    // after homing the reading is raw - (raw_at_stopper - homing_offset): a reading too high by e needs offset - e
+    for (std::size_t i = 0; i < NUM_JOINTS; ++i) {
+        const double q = limp_mean_pos_[i];
+        const auto motor_index = joint_id_to_motor_index_.at(kinematics_->joint_id(kPolicyJointNames[i]));
         const double offset = motor_manager_->homing(motor_index).offset;
-        // after homing the reading is raw - (raw_at_stopper - homing_offset): a reading too high by e needs offset - e
-        std::printf("[limp]   %-12s %+8.2f   %+8.2f     %+8.2f        %2d          %+.4f -> %+.4f\n",
-                    kPolicyJointNames[i + 1] + 6, l * DEG, r * DEG, (r - l) * DEG, static_cast<int>(motor_index) + 1,
-                    offset, offset - (r - l));
+        std::printf("[no-torque]   %-18s %+8.2f      %2d        %+.4f -> %+.4f", kPolicyJointNames[i], q * DEG,
+                    static_cast<int>(motor_index) + 1, offset, offset - q);
+        if (i % 2 == 1) std::printf("   | %+8.2f", (q - limp_mean_pos_[i - 1]) * DEG);
+        std::printf("\n");
     }
     std::fflush(stdout);
 }

@@ -54,13 +54,12 @@ public:
     // stop the olaf servo thread (it writes the motor commands); main.cpp calls it before Robot::stop()
     void shutdown_servo();
 
-    // Zero check (main.cpp --observe --limp-right): after initialize() the right-leg motors get kp 0 (policy kd only,
-    // so the leg is limp but damped) while the left leg keeps holding the default pose. Hold the pelvis level with
-    // both soles pressed flat on the floor, the right foot placed as the mirror image of the left; the right-leg
-    // readings then differ from the left-leg ones by the right-leg zero error (motor.yaml has the same
-    // homing_offset on both sides). update_limp_stats() averages that difference every control step (~2 s window),
-    // print_limp_report() prints it with the homing_offset that would remove it.
-    void set_limp_right();
+    // Home-offset check (main.cpp --no-torque): after homing (initialize()) every leg motor gets kp 0 (policy kd only,
+    // so the legs are limp but damped). Put the robot on the jig so that every joint sits at its zero (URDF zero = the
+    // pose the jig is built for). update_limp_stats() averages each joint reading every control step (~2 s window);
+    // print_limp_report() prints the reading, the left / right difference and, per motor, the homing_offset that would
+    // make the jig pose read 0 (offset - reading).
+    void set_no_torque();
 
     void update_limp_stats();
 
@@ -193,9 +192,9 @@ private:
 
     motor_interface::motor_state_t last_motor_status_[12]{};
 
-    bool limp_right_{false};
+    bool no_torque_{false};
 
-    std::array<double, 12> limp_mean_pos_{};   // policy order, EMA of the joint positions while the right leg is limp
+    std::array<double, 12> limp_mean_pos_{};   // policy order, EMA of the joint positions while the legs are limp
 
     bool limp_stats_init_{false};
 

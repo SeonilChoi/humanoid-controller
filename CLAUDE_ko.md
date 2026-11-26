@@ -36,7 +36,8 @@ cd ~/humanoid_controller_olaf/build
 ./ARTI-H1 ../config/robot/ARTI-H1/robot_olaf.yaml --observe   # 추정기 / 관측 확인, 정책 없음
 ```
 그 밖의 옵션: `--imu-calib` / `--no-imu-calib`(기본은 `policy.imu_still_time: 10` s 동안 자이로 바이어스와 자세 수렴),
-`--blind-imu`, `--model <onnx>`. Ctrl+C로 멈추면 로그가 저장된다.
+`--blind-imu`, `--model <onnx>`, `--no-torque`(호밍 후 양쪽 다리 모두 힘을 풀어, 지그에 올려 관절 영점에 맞추고
+모터별 추천 `homing_offset`을 읽는다; README). Ctrl+C로 멈추면 로그가 저장된다.
 
 스틱: WALK 왼쪽 스틱 = 경로 vx / vy, 오른쪽 스틱 좌우 = 회전(vx −0.12..0.15 m/s, vy ±0.068 m/s, wz ±0.4 rad/s,
 학습과 같이 참조 키 범위로 투영). STAND 왼쪽 스틱 = 몸통 pitch / roll, 오른쪽 스틱 = 몸통 yaw / 높이(dz −3..+1.5 cm).
@@ -102,8 +103,8 @@ RSS 2024)을 따른다. **모드마다 정책을 따로 두고 버튼으로 고�
 
 | 키 | 값 | 맞춰야 할 대상 |
 |---|---|---|
-| `model_file` | `agent_olaf_walk_smooth_480000.onnx` (walk_10, 11-24부터. walk_13은 실물에서 돌다가 넘어짐) | — |
-| `olaf.stand_model_file` | `agent_olaf_stand_smooth_72000.onnx` (stand_07, 11-24부터. stage4/5는 7~9 Hz로 떨림). 대안: `agent_olaf_stand_stage3_480000.onnx` | — |
+| `model_file` | `agent_olaf_walk15_480000.onnx` (walk_15, 11-25부터, 실물 시험 전). 복귀용: `agent_olaf_walk_smooth_480000.onnx` (walk_10). walk_13은 실물에서 돌다가 넘어짐 | — |
+| `olaf.stand_model_file` | `agent_olaf_stand_stage6_480000.onnx` (stage 6, 11-26부터, 실물 시험 전). 복귀용: `agent_olaf_stand_smooth_72000.onnx` (stand_07). stage4/5는 7~9 Hz로 떨림 | — |
 | `olaf.walk_keys_file` | `olaf_walk_keys.yaml` | `export_onnx.py --keys_out` (참조 클립 키) |
 | `policy.control_dt` | 0.02 | 600 Hz에서 decimation 12 |
 | `policy.default_pose` | 서 있는 기본 자세 (hip_pitch 0.33555, knee −0.67109, ankle_pitch −0.33555) | env init joint_pos |

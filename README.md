@@ -170,13 +170,13 @@ restart to walk again); the CSV column `fault` has the bits 1 IMU, 2 motor link,
 support the robot, read the FAULT line, then `Ctrl+C` (the log is flushed) and fix the cause before restarting. A fall
 (tilt > `policy.max_tilt`) still damps the joints and exits, and a link fault during homing still aborts homing.
 
-**Right-leg zero check** (11-11: in the default pose the right sole does not reach the floor, while motor.yaml uses
-the same homing_offset on both sides): `./ARTI-H1 ../config/robot/ARTI-H1/robot_velocity.yaml --observe --limp-right`.
-After homing and the IMU calibration the right-leg motors go limp (kp 0, damping only) and the left leg keeps the default
-pose. **Support the robot**, hold the pelvis level (printed roll / pitch near 0) and press both soles flat on the floor
-with the right foot placed as the mirror image of the left. Every 0.5 s it prints the ~2 s average of left / right joint
-angles, right - left, and the right motor's homing_offset now -> suggested (offset - (right - left)). Copy the
-suggestion into motor.yaml once the numbers are steady, home again and check that the right sole now touches.
+**Home-offset check on the jig** (`--no-torque`, replaces the old right-leg-only `--limp-right`):
+`./ARTI-H1 ../config/robot/ARTI-H1/robot_olaf.yaml --no-torque` (any robot yaml). The robot homes as usual (keep it in
+the air), then **every leg motor goes limp** (kp 0, damping only; no policy). **Support the robot**, put it on the jig
+so that every joint sits at its zero (URDF zero), and keep it still. Every 0.5 s it prints, per joint, the ~2 s average
+reading (should be 0 on the jig), the motor id, its homing_offset now -> suggested (offset - reading), and right - left
+per joint pair. Copy the suggestions into motor.yaml once the numbers are steady, then home again and re-check (the
+readings should be near 0). Ctrl+C stops.
 
 **Branch `arti-h1-olaf`**: the Olaf method (arXiv 2512.16705; training project
 [ARTI-H1-Olaf](https://github.com/SeonilChoi/ARTI-H1-Olaf)) on the KB robot, with separate walking and standing
