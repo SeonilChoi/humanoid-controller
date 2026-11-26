@@ -20,7 +20,7 @@ masters:
         min: -0.7056
         max:  0.7056
         homing_direction: 1
-        homing_offset: 0.7056
+        homing_offset: 0.7187    # 11-26 jig (--no-torque): read -0.75 deg at joint zero, was 0.7056
         homing_velocity: 0.3
         homing_kp: 0.3
         homing_kd: 0.025
@@ -40,7 +40,7 @@ masters:
         min: -0.7056
         max:  0.7056
         homing_direction: 1
-        homing_offset: 0.7056
+        homing_offset: 0.6899    # 11-26 jig (--no-torque): read +0.90 deg at joint zero, was 0.7056
         homing_velocity: 0.3
         homing_kp: 0.3
         homing_kd: 0.025
@@ -60,7 +60,7 @@ masters:
         min: -0.2854
         max:  0.4
         homing_direction: -1
-        homing_offset: -0.2854
+        homing_offset: -0.3044    # 11-26 jig (--no-torque): read +1.09 deg at joint zero, was -0.2854
         homing_velocity: 0.3
         homing_kp: 0.45    # 11-11: raised with the threshold (stall push ~ kp * 0.15 rad lead)
         homing_kd: 0.025
@@ -80,7 +80,7 @@ masters:
         min: -0.2854
         max:  0.4
         homing_direction: -1
-        homing_offset: -0.2854
+        homing_offset: -0.3102    # 11-26 jig (--no-torque): read +1.42 deg at joint zero, was -0.2854
         homing_velocity: 0.3
         homing_kp: 0.45    # 11-11: raised with the threshold (stall push ~ kp * 0.15 rad lead)
         homing_kd: 0.025
@@ -100,7 +100,7 @@ masters:
         min: -0.3041
         max:  0.9363
         homing_direction: -1
-        homing_offset: -0.3041
+        homing_offset: -0.3594    # 11-26 jig (--no-torque): read +3.17 deg at joint zero, was -0.3041
         homing_velocity: 0.3
         homing_kp: 0.3
         homing_kd: 0.025
@@ -120,7 +120,7 @@ masters:
         min: -0.3041
         max:  0.9363
         homing_direction: -1
-        homing_offset: -0.3041
+        homing_offset: -0.3156    # 11-26 jig (--no-torque): read +0.66 deg at joint zero, was -0.3041
         homing_velocity: 0.3
         homing_kp: 0.3
         homing_kd: 0.025
@@ -140,7 +140,7 @@ masters:
         min: -1.3727
         max:  0.6531
         homing_direction: 1
-        homing_offset: 0.6531
+        homing_offset: 0.7412    # 11-26 jig (--no-torque): read -5.05 deg at joint zero, was 0.6531
         homing_velocity: 0.3
         homing_kp: 0.3
         homing_kd: 0.025
@@ -160,7 +160,7 @@ masters:
         min: -1.3727
         max:  0.6531
         homing_direction: 1
-        homing_offset: 0.6531
+        homing_offset: 0.7027    # 11-26 jig (--no-torque): read -2.84 deg at joint zero, was 0.6531
         homing_velocity: 0.3
         homing_kp: 0.3
         homing_kd: 0.025
@@ -186,7 +186,7 @@ masters:
         min: -0.9363
         max:  0.3090
         homing_direction: 1
-        homing_offset: 0.3090
+        homing_offset: 0.4095    # 11-26 jig (--no-torque): read -5.76 deg at joint zero, was 0.3090
         homing_velocity: 0.3
         homing_kp: 10.0
         homing_kd: 0.5
@@ -206,7 +206,7 @@ masters:
         min: -0.9363
         max:  0.3090
         homing_direction: 1
-        homing_offset: 0.3090
+        homing_offset: 0.3982    # 11-26 jig (--no-torque): read -5.11 deg at joint zero, was 0.3090
         homing_velocity: 0.3
         homing_kp: 10.0
         homing_kd: 0.5
@@ -226,7 +226,7 @@ masters:
         min: -0.7854    # 11-17: free end = URDF ankle_roll limit -45 deg (homing side moved to +27.7 deg)
         max:  0.4835
         homing_direction: 1     # 11-17: was -1 (stopper at -87.2 deg)
-        homing_offset: 0.4835    # 11-17: +27.7 deg (was -1.5216 = -87.2 deg)
+        homing_offset: 0.5135    # 11-26 jig (--no-torque): read -1.72 deg at joint zero, was 0.4835
         homing_velocity: 0.3
         homing_kp: 15.0    # 11-11: raised with the threshold (stall push ~ kp * 0.15 rad lead)
         homing_kd: 0.5
@@ -246,7 +246,7 @@ masters:
         min: -0.7854    # 11-17: free end = URDF ankle_roll limit -45 deg (homing side moved to +27.7 deg)
         max:  0.4835
         homing_direction: 1     # 11-17: was -1 (stopper at -87.2 deg)
-        homing_offset: 0.4835    # 11-17: +27.7 deg (was -1.5216 = -87.2 deg)
+        homing_offset: 0.5055    # 11-26 jig (--no-torque): read -1.26 deg at joint zero, was 0.4835
         homing_velocity: 0.3
         homing_kp: 15.0    # 11-11: raised with the threshold (stall push ~ kp * 0.15 rad lead)
         homing_kd: 0.5
