@@ -84,8 +84,9 @@ RSS 2024)을 따른다. **모드마다 정책을 따로 두고 버튼으로 고�
   - STAND: g = 몸통 자세 (dz, roll, pitch, yaw). 왼쪽 스틱 pitch / roll, 오른쪽 스틱 yaw / 높이. 스틱은 목표만 정하고
     g는 초당 `stand_command_rate`만큼 따라간다(env의 속도 제한 추종). 스틱을 갑자기 움직여도 입력이 계단처럼 바뀌지 않는다.
     11-24부터 STAND 목표는 조작감을 위해 한 번 더 다듬는다(사용자: 너무 확확 반영됨): 데드존 경계에서 계단이 없는 연속
-    데드존, expo 곡선 `olaf.stand_stick_expo` 0.6, 목표에 1차 저역통과 `olaf.stand_target_tau` 0.4 s, `stand_command_rate`는
-    학습 속도의 절반. 모두 학습 때보다 느리므로 정책에는 새로운 입력이 아니다. 예전 조작감은 expo 0 / tau 0 / 학습 속도.
+    데드존, expo 곡선 `olaf.stand_stick_expo`, 목표에 1차 저역통과 `olaf.stand_target_tau`, 학습보다 느린 `stand_command_rate`.
+    11-24: expo 0.6 / tau 0.4 s / 학습 속도의 절반. 11-27(너무 느림): expo 0.4 / tau 0.2 s / 학습 속도의 0.75배.
+    모두 학습 때보다 느리므로 정책에는 새로운 입력이 아니다. 원래 조작감은 expo 0 / tau 0 / 학습 속도.
   - 모든 축에 `stick_deadzone` 0.1이 적용된다. 스틱을 놓으면 g = 0이다(WALK: 제자리 걸음, STAND: 기본 자세).
 - **BD-X식 전환:** WALK → STAND는 즉시 일어나지 않는다. circle은 요청만 하고, WALK는 g = 0으로 계속 걷다가 다음 착지
   (양발 접촉) 때 전환한다. 최대 `stand_switch_timeout`(1 s)까지 기다린다. sim(`scripts/eval_switch.py`, walk_09 + stand_07)에서
@@ -103,7 +104,7 @@ RSS 2024)을 따른다. **모드마다 정책을 따로 두고 버튼으로 고�
 
 | 키 | 값 | 맞춰야 할 대상 |
 |---|---|---|
-| `model_file` | `agent_olaf_walk15_480000.onnx` (walk_15, 11-25부터, 실물 시험 전). 복귀용: `agent_olaf_walk_smooth_480000.onnx` (walk_10). walk_13은 실물에서 돌다가 넘어짐 | — |
+| `model_file` | `agent_olaf_walk16_240000.onnx` (walk_16, 11-27부터, 실물 시험 전: 시뮬에서 착지 충격 감소). 복귀용: `agent_olaf_walk15_480000.onnx` (walk_15, 11-26 실물에서 흔들림·세게 찍음), `agent_olaf_walk_smooth_480000.onnx` (walk_10). walk_13은 실물에서 돌다가 넘어짐 | — |
 | `olaf.stand_model_file` | `agent_olaf_stand_stage6_480000.onnx` (stage 6, 11-26부터, 실물 시험 전). 복귀용: `agent_olaf_stand_smooth_72000.onnx` (stand_07). stage4/5는 7~9 Hz로 떨림 | — |
 | `olaf.walk_keys_file` | `olaf_walk_keys.yaml` | `export_onnx.py --keys_out` (참조 클립 키) |
 | `policy.control_dt` | 0.02 | 600 Hz에서 decimation 12 |

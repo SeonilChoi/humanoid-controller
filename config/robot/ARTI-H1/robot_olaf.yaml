@@ -14,7 +14,7 @@ urdf_file: ../config/robot/ARTI-H1/robot.urdf
 #          right stick left / right = trunk yaw, up / down = trunk height
 # Export: arti_h1_olaf scripts/export_onnx.py --checkpoint <run>/checkpoints/agent_N.pt --out agent_olaf_walk_N.onnx
 # (and the stand run -> agent_olaf_stand_N.onnx); olaf_walk_keys.yaml comes from the same script (--keys_out).
-model_file: ../config/robot/ARTI-H1/agent_olaf_walk15_480000.onnx   # walk_15 agent_480000 (walk_10 + yaw-drift penalty, no series-compliance DR, b_g,z frozen, 40 s episodes); sim: 11-23 replay falls 10/32 (walk_10 21/32), hard floor s=1.0 46/128 (83/128). Fallback: agent_olaf_walk_smooth_480000.onnx = walk_10 (11-24 robot: 130 s walking, yaw +0.4 deg/s). walk_13 (agent_olaf_walk13_480000.onnx) spun and fell within 3.5 s
+model_file: ../config/robot/ARTI-H1/agent_olaf_walk16_240000.onnx   # walk_16 agent_240000 (walk_15 + high-passed torso roll / yaw rate penalty + impact weight x3); sim replay of the 11-26 logs: falls 63 vs walk_15 67 / walk_10 116, touchdown IMU peak -40 %, left-foot bias gone. Fallbacks: agent_olaf_walk15_480000.onnx = walk_15 (11-26 robot: walks, yaw 0, but shakes and stomps, left foot hardest), agent_olaf_walk_smooth_480000.onnx = walk_10. walk_13 (agent_olaf_walk13_480000.onnx) spun and fell within 3.5 s
 log_file: ./arti_h1_olaf_run
 
 motors:
@@ -86,7 +86,7 @@ policy:
   default_pose: [0.0, 0.0, 0.0, 0.0, 0.33555, 0.33555, -0.67109, -0.67109, -0.33555, -0.33554, 0.0, 0.0]
 
 olaf:
-  stand_model_file: ../config/robot/ARTI-H1/agent_olaf_stand_smooth_72000.onnx   # stage 6 agent_480000 (stage 3 + no series-compliance DR, b_g,z frozen, 20 Hz low-pass); sim vs stand_07: falls 127 vs 380 (push), 23 vs 125 (no push), walk_15 -> stand switch 23 vs 65 %. Fallback if it shakes: agent_olaf_stand_smooth_72000.onnx = stand_07 (no tremor on 11-21 / 11-24). stage 4 / stage 5 (compliance DR) shook at 7-9 Hz
+  stand_model_file: ../config/robot/ARTI-H1/agent_olaf_stand_smooth_72000.onnx   # stand_07 (no tremor on 11-21 / 11-24 / 11-26). Candidate: agent_olaf_stand_stage6_480000.onnx = stage 6 (stage 3 + no series-compliance DR, b_g,z frozen, 20 Hz low-pass); sim vs stand_07: falls 127 vs 380 (push), 23 vs 125 (no push), walk_15 -> stand switch 23 vs 65 %, not yet on the robot. stage 4 / stage 5 (compliance DR) shook at 7-9 Hz
   walk_keys_file: ../config/robot/ARTI-H1/olaf_walk_keys.yaml
   reference_knn: 4
   walk_period: 0.8              # s, reference gait period
@@ -102,10 +102,12 @@ olaf:
   walk_command_range: [[-0.12, 0.15], [-0.068, 0.068], [-0.40, 0.40]]       # vx m/s, vy m/s, wz rad/s
   stand_command_range: [[-0.03, 0.015], [-0.10, 0.10], [-0.15, 0.15], [-0.30, 0.30]]   # dz m, roll, pitch, yaw rad
   # STAND stick feel (11-24, operator: commands came in too abruptly). Slower than training (rates there: 0.05 0.3 0.3 0.5),
-  # so the policy sees nothing new. Full-range roll now takes ~0.7 s instead of ~0.3 s; 0 / 0 / training rates = old feel.
-  stand_command_rate: [0.025, 0.15, 0.15, 0.25]                              # per second (half the training follow rate)
-  stand_stick_expo: 0.6         # 0 = linear stick, 1 = cubic (fine control near the centre)
-  stand_target_tau: 0.4         # s, first-order low-pass on the stick target before the rate limit
+  # so the policy sees nothing new. 0 / 0 / training rates = the original feel.
+  # 11-27 (operator: now too sluggish): rate 0.5 -> 0.75x training, target tau 0.4 -> 0.2 s, expo 0.6 -> 0.4. Full-range
+  # roll ~0.5 s (11-24 setting ~0.7 s, original ~0.3 s). 11-24 values: [0.025, 0.15, 0.15, 0.25] / 0.6 / 0.4
+  stand_command_rate: [0.0375, 0.225, 0.225, 0.375]                          # per second (0.75x the training follow rate)
+  stand_stick_expo: 0.4         # 0 = linear stick, 1 = cubic (fine control near the centre)
+  stand_target_tau: 0.2         # s, first-order low-pass on the stick target before the rate limit
   # runtime chain (training action_first_order_hold / action_lowpass_hz / action_rate_limit, sim.dt 1/600)
   actuator_rate: 600.0          # Hz, servo thread
   action_lowpass_hz: 37.5       # WALK policy = training. 11-20: 20 Hz made the sim walk fall 33x more (1 -> 33 / 64 envs / 15 s)

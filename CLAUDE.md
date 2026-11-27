@@ -94,9 +94,10 @@ each policy's control input g** instead of joint targets. Keep this structure wh
   - STAND: g = trunk pose (dz, roll, pitch, yaw). Left stick pitch / roll, right stick yaw / height. The stick sets a
     target and g follows it at `stand_command_rate` per second (the env's rate-limited follow), so a stick snap does
     not step the input. Since 11-24 the STAND target is also shaped for the operator (they found it too abrupt):
-    continuous deadzone (no step at its edge), expo curve `olaf.stand_stick_expo` 0.6, first-order low-pass
-    `olaf.stand_target_tau` 0.4 s, and `stand_command_rate` at half the training rate. Everything is slower than the
-    training follow, so the policy sees nothing new. Set expo 0 / tau 0 / training rates for the old feel.
+    continuous deadzone (no step at its edge), expo curve `olaf.stand_stick_expo`, first-order low-pass
+    `olaf.stand_target_tau`, and `stand_command_rate` below the training rate. 11-24: expo 0.6 / tau 0.4 s / half rate;
+    11-27 (too sluggish): expo 0.4 / tau 0.2 s / 0.75x rate. Everything stays slower than the training follow, so the
+    policy sees nothing new. Set expo 0 / tau 0 / training rates for the original feel.
   - `stick_deadzone` 0.1 applies to every axis; a released stick is g = 0 (WALK: step in place, STAND: nominal pose).
 - **Transitions as in BD-X:** WALK → STAND is not immediate. Circle sets a request, WALK keeps stepping with g = 0, and
   the switch happens at the next touchdown (both soles in contact), at most `stand_switch_timeout` (1 s) later. In sim
@@ -116,7 +117,7 @@ each policy's control input g** instead of joint targets. Keep this structure wh
 
 | Key | Value | Must match |
 |---|---|---|
-| `model_file` | `agent_olaf_walk15_480000.onnx` (walk_15, since 11-25, robot test pending). Fallback: `agent_olaf_walk_smooth_480000.onnx` (walk_10); walk_13 spun and fell on the robot | — |
+| `model_file` | `agent_olaf_walk16_240000.onnx` (walk_16, since 11-27, robot test pending: less stomping in sim). Fallbacks: `agent_olaf_walk15_480000.onnx` (walk_15; 11-26 robot: shook and stomped), `agent_olaf_walk_smooth_480000.onnx` (walk_10); walk_13 spun and fell on the robot | — |
 | `olaf.stand_model_file` | `agent_olaf_stand_stage6_480000.onnx` (stage 6, since 11-26, robot test pending). Fallback: `agent_olaf_stand_smooth_72000.onnx` (stand_07); stage 4 / 5 shook at 7-9 Hz | — |
 | `olaf.walk_keys_file` | `olaf_walk_keys.yaml` | `export_onnx.py --keys_out` (reference clip keys) |
 | `policy.control_dt` | 0.02 | decimation 12 at 600 Hz |
